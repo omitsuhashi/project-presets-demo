@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.2.0
+
+- `python-django` と `python-fastapi` を追加。Django 6.1.1 / FastAPI 0.142.2 / Uvicorn 0.54.0 と対応する Ruff の `DJ` / `FAST` ルールを固定。
+- CLI がフレームワークを利用側の実行用依存に登録し、preset・Ruff の開発用依存と分離。uv lock とコピーした設定を同時に更新。
+- Django の system check / テストを更新 script に追加。FastAPI のアプリテストは caller の `test-command` で指定。
+- 両フレームワークの最小 HTTP アプリ、開発依存なしの実行、旧版からの依存更新、設定保持、手動変更・削除 / Profile 切替の拒否、revert を検証。
+
+既存 Profile のルールは変更しない。Python スクリプトは従来の設定で更新可能。フレームワークの切替、業務コード、DB migration と本番設定は案件側で移行する。既存の更新 workflow の参照タグを `v1.2.0` に更新すると新 Profile も対象になる。
+
 ## 1.0.0
 
 - Node.js、Hono、Next.js、Python スクリプトの構成 Profile。

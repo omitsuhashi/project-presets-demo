@@ -12,6 +12,8 @@
 | `typescript-hono` | Node.js 24 / HTTP API | Hono 4.13.12、Node adapter 2.1.3、Node 用 lint / TypeScript |
 | `typescript-next` | Node.js 24 / Next.js App Router | Next.js 16.3.8、React 19.3.0、対応する lint / 型定義 / compiler 設定 |
 | `python-scripts` | Python 3.12 / スクリプト | Ruff 0.16.10、correctness / import / bugbear 設定、print を許可 |
+| `python-django` | Python 3.12 / Django | Django 6.1.1、Ruff の `DJ` ルール、service 用の print 検査 |
+| `python-fastapi` | Python 3.12 / HTTP API | FastAPI 0.142.2、Uvicorn 0.54.0、Ruff の `FAST` ルール、`Annotated` を推奨 |
 
 [profiles.json](profiles.json) と各パッケージの manifest を CI で照合します。Next.js と `eslint-config-next` も同じ版に揃え、代表アプリで検証します。
 
@@ -26,7 +28,7 @@ npm init -y
 npm pkg set type=module
 npm pkg delete scripts.test
 npm install --package-lock-only --allow-remote=root --ignore-scripts --save-dev --save-exact \
-  https://github.com/omitsuhashi/project-presets-demo/releases/download/v1.1.1/project-presets-demo-1.1.1.tgz \
+  https://github.com/omitsuhashi/project-presets-demo/releases/download/v1.2.0/project-presets-demo-1.2.0.tgz \
   eslint@9.39.5 typescript@6.0.3
 npm ci --allow-remote=root --ignore-scripts
 
@@ -53,7 +55,8 @@ Python 3.12 と uv を使います。Node.js と Git submodule は不要です�
 
 ```sh
 uv init --bare --python 3.12
-uv add --dev 'project-presets-demo @ https://github.com/omitsuhashi/project-presets-demo/releases/download/v1.1.1/project_presets_demo-1.1.1-py3-none-any.whl'
+uv python pin 3.12
+uv add --dev 'project-presets-demo @ https://github.com/omitsuhashi/project-presets-demo/releases/download/v1.2.0/project_presets_demo-1.2.0-py3-none-any.whl'
 uv run --locked project-presets-python python-scripts
 uv run --locked project-presets-python python-scripts --write --sync
 uv run --locked project-presets-python python-scripts --check
@@ -61,6 +64,23 @@ uv run --locked ruff check .
 ```
 
 wheel が Ruff の exact version を依存として持つので、preset の更新と Ruff の更新が同じ uv lock に入ります。CLI は配布された設定を `.project-presets/ruff/` に配置し、`pyproject.toml` に薄い参照を追加します。設定ファイルと `.project-preset.json` は commit してください。
+
+フレームワークを使う案件では、初回から `python-django` または `python-fastapi` を選びます。上記の wheel を導入した後、例えば Django は次のように始められます。
+
+```sh
+uv run --locked project-presets-python python-django
+uv run --locked project-presets-python python-django --write --sync
+uv run --locked project-presets-python python-django --check
+uv run --locked django-admin startproject demo .
+uv run --locked python manage.py check
+uv run --locked python manage.py test
+```
+
+FastAPI は `python-fastapi --write --sync` を適用し、[main.py と HTTP テスト](examples/fastapi) を配置して `uv run --locked uvicorn main:app` で起動します。テストは `uv run --locked python -m unittest discover` です。[Django の最小アプリ](examples/django) も `/health` の応答をテストします。
+
+フレームワークの固定版は wheel の optional dependency metadata から取得し、CLI が **利用側の `[project].dependencies` に登録**します。Ruff と preset は開発用なので、`uv sync --locked --no-dev` でもアプリに必要な Django / FastAPI / Uvicorn は残ります。DB driver、認証、業務アプリの依存は案件側で追加します。
+
+Django は `DJ`、FastAPI は `FAST` を共通 correctness / import / bugbear ルールに加えます。両方で print を検査し、FastAPI の引数には `Annotated` を使います。Django 用は `django.toml`、FastAPI 用は `fastapi.toml` を `extend` します。既存依存は exact pin に合わせて統合してください。管理する依存の手動変更・削除、Profile の切替は停止します。例は開発用の最小アプリです。Django の本番設定・migration、FastAPI の業務テストは利用側で検証します。
 
 ```toml
 [tool.ruff]
@@ -81,14 +101,14 @@ ignore = ["F401"]
 [更新 script](scripts/update-consumer.py) は、選択済みの Profile に応じて新しい配布物を導入し、その版の設定・依存・lock を更新して検証します。script は利用側のディレクトリの外に置きます。
 
 ```sh
-# 利用側のルートで実行。1.2.0 は、その版を公開した後の例。
+# 利用側のルートで実行。
 uv run --no-project --python 3.12 python /path/to/preset-provider/scripts/update-consumer.py --version 1.2.0
 ```
 
 版を省略すると `gh` で公開済みの Release を調べ、現在と同じ major の最新版を選びます。prerelease・draft・未公開版は自動採用しません。major 更新やロールバックは `--version` で明示します。アプリのフレームワーク切替や業務コード移行は自動変換しません。
 
 - TypeScript: パッケージ、管理依存、npm lock の整合性、lint、型チェックと、設定済みの `build` / `test` scripts を検証します。
-- Python: パッケージ、同梱設定、Ruff、uv lock の整合性と lint を検証します。案件のテストも追加してください。
+- Python: パッケージ、同梱設定、Ruff、実行用のフレームワーク依存、uv lock の整合性と lint を検証します。Django は標準の `manage.py check` / `test` も実行します。FastAPI などの案件のテストは `test-command` に追加してください。
 
 更新の途中で install・検証が失敗したら、PR をマージせず残った差分を確認します。ファイル置換とパッケージ管理をまたぐ処理はトランザクションではありません。元の manifest・lock・marker・管理設定を戻し、TypeScript は `npm ci --allow-remote=root --ignore-scripts`、Python は `uv sync --locked` で復旧します。マージ後は更新 PR を revert して同じ操作をします。
 
@@ -125,6 +145,10 @@ npm test
 
 CI では Git 配布の互換性、Hono の応答、Next.js の build に加え、実際に build した npm tarball / Python wheel を導入・更新します。ネイティブの lock、設定の更新、案件固有の上書き、手動変更の拒否、commit の revert と復旧を確認します。テストの `v2.0.0` は一時 fixture です。
 
+Python 3.12 上で Django の system check / HTTP テストと FastAPI / Uvicorn の実 HTTP 応答を確認します。開発依存を除いた実行、フレームワークの旧版から新版への更新、lint ルール、設定保持、依存の手動変更・削除と Profile 切替の拒否、revert 後の再実行を検証します。
+
 参照: [npm tarball install](https://docs.npmjs.com/cli/v11/commands/npm-install/)、[uv package distribution](https://docs.astral.sh/uv/guides/package/)、[Ruff configuration](https://docs.astral.sh/ruff/configuration/)、[GitHub workflow trigger rules](https://docs.github.com/en/actions/how-tos/writing-workflows/choosing-when-your-workflow-runs/triggering-a-workflow)。
+
+Framework の参照: [Django 6.1 / Python 互換性](https://docs.djangoproject.com/en/6.1/faq/install/)、[FastAPI のサーバー起動](https://fastapi.tiangolo.com/deployment/manually/)、[Ruff の Django / FastAPI ルール](https://docs.astral.sh/ruff/rules/)。
 
 MIT License.

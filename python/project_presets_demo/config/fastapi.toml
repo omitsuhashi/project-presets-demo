@@ -1,0 +1,4 @@
+extend = "service.toml"
+
+[lint]
+extend-select = ["FAST"]

@@ -4,6 +4,7 @@ import argparse
 import hashlib
 import importlib.metadata as metadata
 import json
+import re
 import subprocess
 from pathlib import Path
 
@@ -12,7 +13,7 @@ import tomllib
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("profile", choices=["python-scripts"])
+    parser.add_argument("profile", choices=["python-scripts", "python-django", "python-fastapi"])
     parser.add_argument("directory", nargs="?", default=".")
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument("--write", action="store_true")
@@ -22,7 +23,7 @@ def main():
     args = parser.parse_args()
     try:
         apply(args)
-    except (ValueError, OSError, subprocess.CalledProcessError) as error:
+    except (ValueError, OSError, metadata.PackageNotFoundError, subprocess.CalledProcessError) as error:
         parser.exit(1, f"{error}\n")
 
 
@@ -35,21 +36,37 @@ def apply(args):
     manifest = tomllib.loads(text)
     release = metadata.version("project-presets-demo")
     ruff = next(item.removeprefix("ruff==") for item in metadata.requires("project-presets-demo") if item.startswith("ruff=="))
+    kind = args.profile.removeprefix("python-")
+    dependencies = {}
+    for requirement in metadata.requires("project-presets-demo"):
+        match = re.fullmatch(r"([a-z0-9-]+)==([0-9.]+)\s*;\s*extra == ['\"]([a-z]+)['\"]", requirement)
+        if match and match[3] == kind:
+            dependencies[match[1]] = match[2]
+    if kind != "scripts" and not dependencies:
+        raise ValueError("The installed wheel is missing framework dependency pins")
     marker = target / ".project-preset.json"
     previous = json.loads(marker.read_text()) if marker.exists() else None
     if previous and previous["profile"] != args.profile:
         raise ValueError("Changing profiles requires an application migration")
+    if previous and set(previous.get("dependencies", {})) - set(dependencies):
+        raise ValueError("Removing managed dependencies requires an application migration")
     if (target / ".project-presets/.git").exists():
         raise ValueError("Remove the old preset submodule in a reviewed migration before adopting the wheel")
     config = manifest.get("tool", {}).get("ruff")
     if previous and config is None:
         raise ValueError("Ruff configuration was deleted locally; restore before updating")
-    extend = ".project-presets/ruff/scripts.toml"
+    extend = f".project-presets/ruff/{kind}.toml"
     if config is not None:
         if config.get("extend") != extend or (not previous and not args.adopt):
             raise ValueError(f"Integrate [tool.ruff] extend = {extend!r}, then use --adopt to preserve existing settings")
-    else:
-        text += f'\n[tool.ruff]\nextend = "{extend}"\ntarget-version = "py312"\n'
+    for name, version in dependencies.items():
+        current = [item.lower().strip() for item in manifest["project"].get("dependencies", [])
+                   if re.split(r"[^a-z0-9_-]", item.lower().strip(), maxsplit=1)[0].replace("_", "-") == name]
+        old = (previous or {}).get("dependencies", {}).get(name)
+        if current and current not in ([f"{name}=={version}"], [f"{name}=={old}"]):
+            raise ValueError(f"{name} was changed locally; integrate its exact pin before adopting or updating")
+        if old and not current:
+            raise ValueError(f"{name} was deleted locally; restore before updating")
     writes = {}
     hashes = {}
     for source in sorted((Path(__file__).parent / "config").glob("*.toml")):
@@ -67,7 +84,9 @@ def apply(args):
     if previous and set(previous["files"]) - set(hashes):
         raise ValueError("Removing managed configuration requires a migration")
     state = {"profile": args.profile, "release": release, "files": hashes, "devDependencies": {"ruff": ruff}}
-    print(json.dumps({"profile": args.profile, "release": release, "ruff": ruff, "files": list(hashes)}, indent=2))
+    if dependencies:
+        state["dependencies"] = dependencies
+    print(json.dumps({"profile": args.profile, "release": release, "ruff": ruff, "dependencies": dependencies, "files": list(hashes)}, indent=2))
     if args.check:
         if previous != state or config is None:
             raise ValueError("Apply the installed preset before merging")
@@ -78,8 +97,16 @@ def apply(args):
         versions = {item["name"]: item["version"] for item in locked}
         if versions.get("project-presets-demo") != release or versions.get("ruff") != ruff or metadata.version("ruff") != ruff:
             raise ValueError("Sync the preset and Ruff with the uv lock before merging")
+        for name, version in dependencies.items():
+            if f"{name}=={version}" not in [item.lower().strip() for item in manifest["project"].get("dependencies", [])] or versions.get(name) != version or metadata.version(name) != version:
+                raise ValueError(f"Sync the runtime dependency {name} with the uv lock before merging")
         subprocess.run(["uv", "lock", "--check"], cwd=target, check=True)
     if args.write:
+        if dependencies:
+            subprocess.run(["uv", "add", "--no-sync", *(f"{name}=={version}" for name, version in dependencies.items())], cwd=target, check=True)
+            text = manifest_path.read_text()
+        if config is None:
+            text += f'\n[tool.ruff]\nextend = "{extend}"\ntarget-version = "py312"\n'
         writes[manifest_path] = text.encode()
         writes[marker] = (json.dumps(state, indent=2) + "\n").encode()
         # Stage before replacement; on filesystem failure keep files for recovery.

@@ -19,7 +19,7 @@ assert(Object.hasOwn(catalog, id), `Unknown profile: ${id}. Choose ${Object.keys
 const profile = catalog[id];
 if (profile.language === 'python') {
   console.log(JSON.stringify(profile, null, 2));
-  assert(!args.includes('--write') && !args.includes('--check'), 'Python uses Git submodule + uv add -r; see README');
+  assert(!args.includes('--write') && !args.includes('--check'), 'Python uses the wheel and project-presets-python; see README');
 } else {
   const target = resolve(directory);
   const path = (name) => join(target, name);

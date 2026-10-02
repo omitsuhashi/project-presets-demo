@@ -55,13 +55,16 @@ def main():
         run("npm", "exec", "--", "tsc", "--noEmit")
         run("npm", "run", "build", "--if-present")
         run("npm", "run", "test", "--if-present")
-    elif profile == "python-scripts":
+    elif profile in {"python-scripts", "python-django", "python-fastapi"}:
         filename = f"project_presets_demo-{selected}-py3-none-any.whl"
         source = (artifacts / filename).as_uri() if artifacts else f"{base}/{filename}"
         run("uv", "add", "--dev", f"project-presets-demo @ {source}")
         run("uv", "run", "--locked", "project-presets-python", profile, "--write", "--sync")
         run("uv", "run", "--locked", "project-presets-python", profile, "--check")
         run("uv", "run", "--locked", "ruff", "check", ".")
+        if profile == "python-django":
+            run("uv", "run", "--locked", "python", "manage.py", "check")
+            run("uv", "run", "--locked", "python", "manage.py", "test")
     else:
         raise ValueError(f"Unsupported profile: {profile}")
     if json.loads((target / ".project-preset.json").read_text())["release"] != selected:
