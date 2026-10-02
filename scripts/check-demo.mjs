@@ -66,6 +66,8 @@ try {
     cpSync(join(root, path), join(provider, path), { recursive: true });
   }
   const catalog = JSON.parse(readFileSync(join(provider, 'profiles.json'), 'utf8'));
+  const currentNodeTypes = catalog['typescript-node'].devDependencies['@types/node'];
+  const currentRuff = catalog['python-scripts'].devDependencies.ruff;
   declared.version = '1.0.0';
   writeFileSync(join(provider, 'package.json'), JSON.stringify(declared, null, 2) + '\n');
   catalog['typescript-node'].devDependencies['@types/node'] = '24.19.0';
@@ -176,9 +178,9 @@ ignore = ["F401"]\n`);
   const manifest = JSON.parse(readFileSync(join(provider, 'package.json'), 'utf8'));
   manifest.version = '2.0.0';
   writeFileSync(join(provider, 'package.json'), JSON.stringify(manifest, null, 2) + '\n');
-  catalog['typescript-node'].devDependencies['@types/node'] = '24.19.1';
-  catalog['python-scripts'].devDependencies.ruff = '0.16.10';
-  writeFileSync(join(provider, 'profiles/python-scripts/requirements-dev.txt'), 'ruff==0.16.10\n');
+  catalog['typescript-node'].devDependencies['@types/node'] = currentNodeTypes;
+  catalog['python-scripts'].devDependencies.ruff = currentRuff;
+  writeFileSync(join(provider, 'profiles/python-scripts/requirements-dev.txt'), `ruff==${currentRuff}\n`);
   writeFileSync(join(provider, 'profiles.json'), JSON.stringify(catalog, null, 2) + '\n');
   const newSha = commit(provider, 'Release v2.0.0');
   git(provider, 'tag', 'v2.0.0');
@@ -189,13 +191,13 @@ ignore = ["F401"]\n`);
   const updateCommit = commit(py, 'Update pinned preset to v2.0.0');
   assert.deepEqual(lintTs(1)[0].messages.map((message) => message.ruleId), ['no-console']);
   assert.deepEqual(uvLint(1).map((message) => message.code), ['T201']);
-  assert.equal(run(py, 'uv', ['run', '--locked', 'ruff', '--version']).trim(), 'ruff 0.16.10');
+  assert.equal(run(py, 'uv', ['run', '--locked', 'ruff', '--version']).trim(), `ruff ${currentRuff}`);
   assert.equal(git(join(py, '.lint-presets'), 'rev-parse', 'HEAD'), newSha);
   assert.deepEqual(readFileSync(join(ts, 'eslint.config.mjs')), originalTsConfig);
   assert.equal(pythonSettings(), originalPyConfig);
   assert.deepEqual(readFileSync(join(ts, 'main.ts')), originalSource);
   assert.deepEqual(readFileSync(join(ts, 'tsconfig.json')), originalTsconfig);
-  assert.equal(JSON.parse(readFileSync(join(ts, 'package.json'))).devDependencies['@types/node'], '24.19.1');
+  assert.equal(JSON.parse(readFileSync(join(ts, 'package.json'))).devDependencies['@types/node'], currentNodeTypes);
   console.log('PASS: central v2.0.0 updates managed dependency versions and lint together; consumer code and overrides survive');
 
   writeFileSync(join(ts, 'package.json'), oldManifest);
