@@ -1,0 +1,2 @@
+# Scripts may use print. Choose service.toml when logging is required instead.
+extend = "base.toml"

@@ -1,0 +1,4 @@
+[tool.ruff]
+extend = "../../python/scripts.toml"
+target-version = "py312"
+line-length = 100

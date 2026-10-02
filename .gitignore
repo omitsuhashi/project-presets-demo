@@ -1,0 +1,8 @@
+node_modules/
+*.tgz
+.ruff_cache/
+.venv/
+__pycache__/
+.next/
+next-env.d.ts
+*.tsbuildinfo
