@@ -33,8 +33,6 @@ const install = (version) => {
   manifest.devDependencies = {
     ...manifest.devDependencies,
     'project-presets-demo': `git+file://${provider}#${version}`,
-    eslint: '9.39.5',
-    typescript: '6.0.3',
   };
   writeFileSync(join(ts, 'package.json'), JSON.stringify(manifest, null, 2) + '\n');
   run(ts, 'npm', ['install', '--package-lock-only', '--allow-git=root', '--ignore-scripts', '--no-audit', '--no-fund']);
@@ -58,7 +56,7 @@ try {
   for (const profile of Object.values(JSON.parse(readFileSync(join(root, 'profiles.json'), 'utf8')))) {
     if (profile.language !== 'typescript') continue;
     for (const [name, version] of Object.entries({ ...profile.dependencies, ...profile.devDependencies })) {
-      assert.equal(declared.devDependencies[name], version, `Profile and validation dependency differ: ${name}`);
+      assert.equal(declared.dependencies[name] ?? declared.devDependencies[name], version, `Profile and validation dependency differ: ${name}`);
     }
   }
   init(provider);
@@ -147,11 +145,10 @@ ignore = ["F401"]\n`);
     mkdirSync(consumer);
     writeFileSync(join(consumer, 'package.json'), '{"name":"framework-consumer","private":true,"type":"module","scripts":{"custom":"keep"}}\n');
     run(consumer, 'npm', ['install', '--package-lock-only', '--allow-git=root', '--ignore-scripts', '--no-audit', '--no-fund', '--save-dev', '--save-exact',
-      `git+file://${provider}#v1.0.0`, 'eslint@9.39.5', 'typescript@6.0.3']);
+      `git+file://${provider}#v1.0.0`]);
     run(consumer, 'npm', ['ci', '--allow-git=root', '--ignore-scripts', '--no-audit', '--no-fund']);
-    run(consumer, 'node', ['node_modules/project-presets-demo/scripts/apply-profile.mjs', id, '--write']);
-    run(consumer, 'npm', ['install', '--package-lock-only', '--allow-git=root', '--ignore-scripts', '--no-audit', '--no-fund']);
-    run(consumer, 'npm', ['ci', '--allow-git=root', '--ignore-scripts', '--no-audit', '--no-fund']);
+    run(consumer, 'npm', ['exec', '--', 'project-presets', id, '--setup']);
+    run(consumer, 'npm', ['exec', '--', 'project-presets', id, '--check']);
     const applied = JSON.parse(readFileSync(join(consumer, 'package.json')));
     assert.deepEqual(applied.dependencies, catalog[id].dependencies);
     for (const [name, version] of Object.entries(catalog[id].devDependencies)) assert.equal(applied.devDependencies[name], version);

@@ -11,7 +11,7 @@
 | 変更 | 配布版の判断 |
 | --- | --- |
 | 互換性を保つ修正・依存更新 | patch |
-| 既存 Profile に影響しない新しい Profile | minor |
+| 互換性を保つ CLI 機能の追加、既存 Profile に影響しない新しい Profile | minor |
 | 既存 CI を失敗させる lint、非互換な runtime / framework、管理対象の削除 | major、または利用側の移行を明示した別 Profile |
 
 フレームワーク自身の版の数字だけで配布版を決めず、利用側への影響で判断します。例えば Django の feature 更新はアプリの migration / 非互換変更を確認します。
@@ -36,7 +36,7 @@ GitHub CLI 未認証なら `gh auth login` を行います。Git の push に HT
 
 | 対象 | 同じ PR で変更する場所 |
 | --- | --- |
-| TypeScript / ESLint / Hono / Next.js / React / 型定義 | `profiles.json` の依存、`package.json` の検証用 `devDependencies`、該当する `peerDependencies` / 設定 |
+| TypeScript / ESLint / Hono / Next.js / React / 型定義 | `profiles.json` の依存、`package.json` の `dependencies`（ESLint / TypeScript）または検証用 `devDependencies`、該当する `peerDependencies` / 設定 |
 | npm パッケージ自体が依存する共通 lint ツール | `package.json` の `dependencies`、必要な設定 |
 | Ruff | `pyproject.toml` の `dependencies`、全 Python Profile の `devDependencies`、互換用 `profiles/python-scripts/requirements-dev.txt` |
 | Django / FastAPI / Uvicorn | `pyproject.toml` の `optional-dependencies`、対応 Profile の `dependencies` |
@@ -58,10 +58,10 @@ uv add --optional django "django==${DJANGO_VERSION}" --no-sync
 
 ## 3. 配布版と変更説明を更新する
 
-次は `1.2.1` を準備する例です。公開済みかを確認し、未使用の版を選んでください。この例の実行は公開操作ではありません。
+次は `1.3.1` を準備する例です。公開済みかを確認し、未使用の版を選んでください。この例の実行は公開操作ではありません。
 
 ```sh
-PRESET_RELEASE=1.2.1
+PRESET_RELEASE=1.3.1
 npm version "$PRESET_RELEASE" --no-git-tag-version --ignore-scripts
 uv version "$PRESET_RELEASE" --no-sync
 npm install --package-lock-only --ignore-scripts --no-audit --no-fund
@@ -104,7 +104,7 @@ PR のマージ後、`main` の CI 成功を確認してから実行します。
 ```sh
 git switch main
 git pull --ff-only
-PRESET_RELEASE=1.2.1
+PRESET_RELEASE=1.3.1
 # npm と Python の版がこの値と一致することを確認する。
 npm pkg get version
 uv version --short
@@ -128,7 +128,7 @@ gh release download "v${PRESET_RELEASE}" --repo omitsuhashi/project-presets-demo
 (cd "$PRESET_ARTIFACTS" && shasum -a 256 -c SHA256SUMS)
 ```
 
-[導入手順](install.md) の配布版をこの版に置き換え、TypeScript と Python の新規導入・`--check`・アプリテストを行います。旧版を導入した案件でも [更新手順](update.md) を試します。Release notes は該当する changelog の変更・互換性・移行方法を記載します。必要なら、その本文をファイルに保存して `gh release edit "v${PRESET_RELEASE}" --notes-file /path/to/release-notes.md` で反映します。
+[導入手順](install.md) の配布版をこの版に置き換え、TypeScript と Python の配布パッケージ一つからの新規導入・`--setup`・`--check`・アプリテストを行います。旧版を導入した案件でも [更新手順](update.md) を試します。Release notes は該当する changelog の変更・互換性・移行方法を記載します。必要なら、その本文をファイルに保存して `gh release edit "v${PRESET_RELEASE}" --notes-file /path/to/release-notes.md` で反映します。
 
 旧 Git 配布を保守する `release/v1` は、公開が成功した v1 系 commit だけに進めます。
 
