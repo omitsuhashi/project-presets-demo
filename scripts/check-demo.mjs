@@ -41,9 +41,10 @@ const install = (version) => {
   run(ts, 'npm', ['ci', '--allow-git=root', '--ignore-scripts', '--no-audit', '--no-fund']);
   run(ts, 'node', ['node_modules/project-presets-demo/scripts/apply-profile.mjs', 'typescript-node', '--check'], 1);
   run(ts, 'node', ['node_modules/project-presets-demo/scripts/apply-profile.mjs', 'typescript-node', '--write']);
-  run(ts, 'node', ['node_modules/project-presets-demo/scripts/apply-profile.mjs', 'typescript-node', '--check']);
+  run(ts, 'node', ['node_modules/project-presets-demo/scripts/apply-profile.mjs', 'typescript-node', '--check'], 1);
   run(ts, 'npm', ['install', '--package-lock-only', '--allow-git=root', '--ignore-scripts', '--no-audit', '--no-fund']);
   run(ts, 'npm', ['ci', '--allow-git=root', '--ignore-scripts', '--no-audit', '--no-fund']);
+  run(ts, 'node', ['node_modules/project-presets-demo/scripts/apply-profile.mjs', 'typescript-node', '--check']);
 };
 const lintTs = (expected = 0) => JSON.parse(run(ts, join(ts, 'node_modules/.bin/eslint'), [
   'main.ts', '--format', 'json',
@@ -65,6 +66,8 @@ try {
     cpSync(join(root, path), join(provider, path), { recursive: true });
   }
   const catalog = JSON.parse(readFileSync(join(provider, 'profiles.json'), 'utf8'));
+  declared.version = '1.0.0';
+  writeFileSync(join(provider, 'package.json'), JSON.stringify(declared, null, 2) + '\n');
   catalog['typescript-node'].devDependencies['@types/node'] = '24.19.0';
   catalog['python-scripts'].devDependencies.ruff = '0.16.9';
   writeFileSync(join(provider, 'profiles/python-scripts/requirements-dev.txt'), 'ruff==0.16.9\n');

@@ -1,6 +1,6 @@
 {
   "name": "project-presets-demo",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Versioned framework, dependency, TypeScript and lint profiles",
   "type": "module",
   "license": "MIT",
@@ -19,9 +19,10 @@
   "keywords": ["eslint", "eslintconfig", "typescript", "ruff"],
   "scripts": {
     "lint": "eslint typescript scripts eslint.config.mjs examples/typescript",
-    "test": "node scripts/check-demo.mjs",
+    "test": "node scripts/check-demo.mjs && npm run test:packages",
     "demo:ts": "eslint --config examples/typescript/eslint.config.mjs examples/typescript/main.ts",
-    "demo:py": "uvx --from ruff==0.16.10 ruff check examples/python"
+    "demo:py": "uvx --from ruff==0.16.10 ruff check examples/python",
+    "test:packages": "uv run --no-project --python 3.12 python scripts/check-packages.py"
   },
   "dependencies": {
     "@eslint/js": "9.39.5",

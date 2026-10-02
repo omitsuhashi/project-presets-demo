@@ -27,4 +27,5 @@ jobs:
       - run: npm run lint
       - run: npm run demo:ts
       - run: npm run demo:py
+      - run: uvx --from ruff==0.16.10 ruff check --config python/base.toml python/project_presets_demo scripts/check-packages.py scripts/update-consumer.py
       - run: npm test

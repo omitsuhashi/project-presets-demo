@@ -1,0 +1,94 @@
+name: Update a consumer's preset packages
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: Empty selects the latest stable release in the current major
+        type: string
+        default: ''
+      directory:
+        type: string
+        default: .
+      test-command:
+        description: Additional application tests, run before opening the PR
+        type: string
+        default: ''
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+          path: consumer
+          ref: ${{ github.event.repository.default_branch }}
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          repository: omitsuhashi/project-presets-demo
+          ref: v1.1.0
+          path: provider
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: '24'
+      - uses: astral-sh/setup-uv@94527f2e458b27549849d47d273a16bec83a01e9 # v7
+        with:
+          version: '0.11.7'
+          python-version: '3.12'
+      - name: Apply release and validate native locks
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PRESET_DIRECTORY: ${{ inputs.directory }}
+          PRESET_VERSION: ${{ inputs.version }}
+        run: uv run --no-project --python 3.12 python provider/scripts/update-consumer.py --directory "consumer/$PRESET_DIRECTORY" --version "$PRESET_VERSION"
+      - name: Run application tests
+        env:
+          APPLICATION_TESTS: ${{ inputs.test-command }}
+        working-directory: consumer/${{ inputs.directory }}
+        run: |
+          if [ -n "$APPLICATION_TESTS" ]; then
+            bash -e -o pipefail -c "$APPLICATION_TESTS"
+          fi
+      - name: Open a reviewable update PR
+        working-directory: consumer
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          PRESET_DIRECTORY: ${{ inputs.directory }}
+          BASE_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          readarray -t state < <(uv run --no-project --python 3.12 python -c 'import json,os; from pathlib import Path; s=json.loads((Path(os.environ["PRESET_DIRECTORY"])/".project-preset.json").read_text()); print(s["profile"]); print(s["release"])')
+          profile="${state[0]}"
+          version="${state[1]}"
+          branch="codex/update-${profile}-${version}"
+          for path in package.json package-lock.json pyproject.toml uv.lock .project-preset.json .project-presets/ruff; do
+            if [ -e "$PRESET_DIRECTORY/$path" ]; then
+              git add -- "$PRESET_DIRECTORY/$path"
+            fi
+          done
+          if git diff --cached --quiet; then exit 0; fi
+          gh auth setup-git
+          if [ -n "$(git ls-remote --heads origin "$branch")" ]; then
+            echo "An update branch already exists: $branch; keeping it for review."
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git switch -c "$branch"
+          git commit -m "Update $profile preset to $version"
+          git push origin "$branch"
+          body="$RUNNER_TEMP/preset-pr.md"
+          cat > "$body" <<'BODY'
+          Updates the pinned preset package, its managed settings and dependency lock together.
+
+          Validation: preset/lock consistency and lint; TypeScript typecheck and configured build/test scripts; additional caller-supplied application tests.
+
+          Review the release notes and project-specific changes before merging. Roll back by reverting this PR and running npm ci or uv sync --locked.
+          BODY
+          gh pr create --base "$BASE_BRANCH" --head "$branch" --title "Update $profile preset to $version" --body-file "$body"

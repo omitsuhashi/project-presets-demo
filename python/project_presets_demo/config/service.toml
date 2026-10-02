@@ -1,0 +1,4 @@
+extend = "base.toml"
+
+[lint]
+extend-select = ["T20"]
