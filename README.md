@@ -17,6 +17,8 @@
 
 これらは公開デモの検証対象です。組織で採用する標準やサポート範囲は、利用ケースと保守担当を決めてから定めます。
 
+ESLint 9 は [2026-08-06 に EOL](https://eslint.org/version-support/) となっています。現在の Next.js preset に含まれる React plugin の peer 対応に合わせて、このデモでは 9 を固定しています。本運用の構成に昇格する前に、plugin の現行 ESLint 対応を確認し、保守中のツールを使える組み合わせへ更新する必要があります。
+
 ## TypeScript の初回導入
 
 空の npm プロジェクトに、必要な Profile を適用します。Node.js 24 と Git を使います。
