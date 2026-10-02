@@ -48,8 +48,19 @@ def apply(args):
         raise ValueError("--source must be a wheel URL")
     target = Path(args.directory).resolve()
     manifest_path = target / "pyproject.toml"
-    text = manifest_path.read_text()
+    marker = target / ".project-preset.json"
+    previous = json.loads(marker.read_text()) if marker.exists() else None
+    initialize = not manifest_path.exists()
+    if initialize and previous:
+        raise ValueError("pyproject.toml was deleted locally; restore it before updating")
+    if initialize and args.check:
+        raise ValueError("Run --setup to create pyproject.toml and apply this preset")
+    name = re.sub(r"[^a-z0-9._-]+", "-", target.name.lower()).strip("._-") or "project"
+    text = (f'[project]\nname = "{name}"\nversion = "0.0.0"\nrequires-python = ">=3.12,<3.13"\ndependencies = []\n'
+            if initialize else manifest_path.read_text())
     manifest = tomllib.loads(text)
+    if "project" not in manifest:
+        raise ValueError("pyproject.toml must define [project]; add project metadata before applying the preset")
     release = metadata.version("project-presets-demo")
     ruff = next(item.removeprefix("ruff==") for item in metadata.requires("project-presets-demo") if item.startswith("ruff=="))
     base = "https://github.com/omitsuhashi/project-presets-demo/releases/download/"
@@ -69,8 +80,6 @@ def apply(args):
             dependencies[match[1]] = match[2]
     if kind != "scripts" and not dependencies:
         raise ValueError("The installed wheel is missing framework dependency pins")
-    marker = target / ".project-preset.json"
-    previous = json.loads(marker.read_text()) if marker.exists() else None
     if previous and previous["profile"] != args.profile:
         raise ValueError("Changing profiles requires an application migration")
     if previous and set(previous.get("dependencies", {})) - set(dependencies):
@@ -111,7 +120,7 @@ def apply(args):
     state = {"profile": args.profile, "release": release, "files": hashes, "devDependencies": {"ruff": ruff}}
     if dependencies:
         state["dependencies"] = dependencies
-    print(json.dumps({"profile": args.profile, "release": release, "source": artifact if install_preset else preset_source, "ruff": ruff, "dependencies": dependencies, "files": list(hashes)}, indent=2))
+    print(json.dumps({"profile": args.profile, "release": release, "source": artifact if install_preset else preset_source, "ruff": ruff, "dependencies": dependencies, "files": list(hashes), "create": ["pyproject.toml"] if initialize else []}, indent=2))
     if args.check:
         if previous != state or config is None or not has_preset:
             raise ValueError("Apply the installed preset before merging")
@@ -128,6 +137,10 @@ def apply(args):
         subprocess.run(["uv", "lock", "--check"], cwd=target, check=True)
         check_environment(target, {"project-presets-demo": release, "ruff": ruff, **dependencies})
     if args.write:
+        if initialize:
+            target.mkdir(parents=True, exist_ok=True)
+            with manifest_path.open("x") as file:
+                file.write(text)
         if install_preset:
             subprocess.run(["uv", "add", "--dev", "--no-sync", f"project-presets-demo @ {artifact}"], cwd=target, check=True)
             text = manifest_path.read_text()

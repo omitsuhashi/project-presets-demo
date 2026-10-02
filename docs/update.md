@@ -19,7 +19,7 @@ marker に現在の Profile / 配布版が記録されています。未 commit 
 
 | 選び方 | 動作 |
 | --- | --- |
-| `--version 1.4.0` など明示 | 指定した公開版を選ぶ。major 更新・ダウングレードも明示指定 |
+| `--version 1.5.0` など明示 | 指定した公開版を選ぶ。major 更新・ダウングレードも明示指定 |
 | `--version` を省略 | 現在と同じ major で、現在以上の最新 stable Release を選ぶ |
 | Profile の変更 | アプリの移行が必要。通常の更新 CLI は停止する |
 
@@ -33,7 +33,7 @@ marker に現在の Profile / 配布版が記録されています。未 commit 
 
 ```sh
 git switch -c codex/update-project-preset
-PRESET_VERSION=1.4.0
+PRESET_VERSION=1.5.0
 # TypeScript の案件で実行
 npx --yes --allow-remote=root --ignore-scripts \
   "https://github.com/omitsuhashi/project-presets-demo/releases/download/v${PRESET_VERSION}/project-presets-demo-${PRESET_VERSION}.tgz" \
@@ -64,13 +64,13 @@ uv run --locked ruff check .
 script を利用側の外に用意します。以下は利用側のルートで実行する例です。`../preset-provider` が未使用のディレクトリであることを確認してください。
 
 ```sh
-git clone --depth 1 --branch v1.4.0 \
+git clone --depth 1 --branch v1.5.0 \
   https://github.com/omitsuhashi/project-presets-demo.git ../preset-provider
 
 git switch -c codex/update-project-preset
-# 1.4.0 は公開済み版での例。採用する新版に置き換える。
+# 1.5.0 は公開済み版での例。採用する新版に置き換える。
 uv run --no-project --python 3.12 python ../preset-provider/scripts/update-consumer.py \
-  --directory . --version 1.4.0
+  --directory . --version 1.5.0
 ```
 
 script は版を導入してからその版の CLI で管理対象を更新するため、**更新 script に全体の preview モードはありません**。最初の導入 CLI の書き込みなし表示は、インストール済み版についての確認です。更新は branch 上で行い、diff とテストを確認します。
@@ -85,7 +85,7 @@ uv run --no-project --python 3.12 python ../preset-provider/scripts/update-consu
 
 ```sh
 # PRESET_TOOL_VERSION を採用する公開済みのツール版に置き換える。
-PRESET_TOOL_VERSION=1.4.0
+PRESET_TOOL_VERSION=1.5.0
 git -C ../preset-provider fetch --depth 1 origin tag "v${PRESET_TOOL_VERSION}"
 git -C ../preset-provider switch --detach "v${PRESET_TOOL_VERSION}"
 ```
@@ -155,7 +155,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   update:
-    uses: omitsuhashi/project-presets-demo/.github/workflows/update-consumer.yml@v1.4.0
+    uses: omitsuhashi/project-presets-demo/.github/workflows/update-consumer.yml@v1.5.0
     with:
       version: ${{ inputs.version || '' }}
       test-command: uv run --locked python -m unittest discover

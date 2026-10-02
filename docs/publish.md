@@ -58,10 +58,10 @@ uv add --optional django "django==${DJANGO_VERSION}" --no-sync
 
 ## 3. 配布版と変更説明を更新する
 
-次は `1.4.1` を準備する例です。公開済みかを確認し、未使用の版を選んでください。この例の実行は公開操作ではありません。
+次は `1.5.1` を準備する例です。公開済みかを確認し、未使用の版を選んでください。この例の実行は公開操作ではありません。
 
 ```sh
-PRESET_RELEASE=1.4.1
+PRESET_RELEASE=1.5.1
 npm version "$PRESET_RELEASE" --no-git-tag-version --ignore-scripts
 uv version "$PRESET_RELEASE" --no-sync
 npm install --package-lock-only --ignore-scripts --no-audit --no-fund
@@ -104,7 +104,7 @@ PR のマージ後、`main` の CI 成功を確認してから実行します。
 ```sh
 git switch main
 git pull --ff-only
-PRESET_RELEASE=1.4.1
+PRESET_RELEASE=1.5.1
 # npm と Python の版がこの値と一致することを確認する。
 npm pkg get version
 uv version --short
