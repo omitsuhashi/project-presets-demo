@@ -31,7 +31,7 @@ jobs:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           repository: omitsuhashi/project-presets-demo
-          ref: v1.3.0
+          ref: v1.4.0
           path: provider
           persist-credentials: false
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6

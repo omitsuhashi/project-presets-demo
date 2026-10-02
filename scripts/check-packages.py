@@ -113,13 +113,19 @@ with tempfile.TemporaryDirectory(prefix="project-presets-packages-") as director
     init(py)
     (ts / "package.json").write_text('{"name":"consumer","private":true,"type":"module","scripts":{"custom":"keep"}}\n')
     flags = ["--ignore-scripts", "--no-audit", "--no-fund"]
-    run(ts, "npm", "install", "--save-dev", "--save-exact", "--allow-remote=root", remote + "/project-presets-demo-1.0.0.tgz", *flags)
+    npm_source = remote + "/project-presets-demo-1.0.0.tgz"
+    one_shot = ["npx", "--yes", "--allow-remote=root", "--ignore-scripts", npm_source, "typescript-node"]
     cli = ["node", "node_modules/project-presets-demo/scripts/apply-profile.mjs", "typescript-node"]
     before = (ts / "package.json").read_bytes()
-    run(ts, *cli, "--setup", "--check", expected=1)
+    run(ts, *one_shot, "--setup", "--check", expected=1)
+    run(ts, *one_shot, "--setup", "--source", "", expected=1)
+    preview = json.loads(run(ts, *one_shot))
+    assert preview["source"] == "https://github.com/omitsuhashi/project-presets-demo/releases/download/v1.0.0/project-presets-demo-1.0.0.tgz"
+    run(ts, *one_shot, "--source", npm_source)
     assert (ts / "package.json").read_bytes() == before
-    assert set(json.loads(before)["devDependencies"]) == {"project-presets-demo"}
-    run(ts, "npm", "exec", "--", "project-presets", "typescript-node", "--setup")
+    assert not (ts / "node_modules").exists()
+    assert not (ts / ".project-preset.json").exists()
+    run(ts, *one_shot, "--setup", "--source", npm_source)
     run(ts, *cli, "--check")
     ready = {name: (ts / name).read_bytes() for name in ["package.json", "package-lock.json", ".project-preset.json", "eslint.config.mjs", "tsconfig.json"]}
     run(ts, *cli, "--setup")
@@ -150,15 +156,20 @@ line-length = 100
 ignore = ["F401"]
 ''')
     (py / "main.py").write_text('import math\n\nprint("consumer")\n')
-    run(py, "uv", "add", "--dev", "project-presets-demo @ " + (artifacts / "project_presets_demo-1.0.0-py3-none-any.whl").as_uri())
+    wheel = (artifacts / "project_presets_demo-1.0.0-py3-none-any.whl").as_uri()
+    py_one_shot = ["uvx", "--python", "3.12", "--from", wheel, "project-presets-python", "python-scripts"]
     pycli = ["uv", "run", "--locked", "project-presets-python", "python-scripts"]
     before = (py / "pyproject.toml").read_bytes()
-    run(py, *pycli, "--adopt")
+    preview = json.loads(run(py, *py_one_shot, "--adopt"))
+    assert preview["source"] == "https://github.com/omitsuhashi/project-presets-demo/releases/download/v1.0.0/project_presets_demo-1.0.0-py3-none-any.whl"
     assert (py / "pyproject.toml").read_bytes() == before
     assert not (py / ".project-preset.json").exists()
-    run(py, *pycli, "--write", expected=1)
-    run(py, *pycli, "--setup", "--check", expected=2)
-    run(py, *pycli, "--adopt", "--setup")
+    assert not (py / ".venv").exists()
+    run(py, *py_one_shot, "--write", expected=1)
+    run(py, *py_one_shot, "--setup", "--check", expected=2)
+    run(py, *py_one_shot, "--adopt", "--setup", "--source", "", expected=1)
+    run(py, *py_one_shot, "--adopt", "--setup", "--source", wheel)
+    run(py, *py_one_shot, "--check")
     run(py, *pycli, "--check")
     ready = {name: (py / name).read_bytes() for name in ["pyproject.toml", "uv.lock", ".project-preset.json"]}
     run(py, *pycli, "--setup")
@@ -171,9 +182,16 @@ ignore = ["F401"]
     managed.write_bytes(original + b"\n# Local edit\n")
     run(py, *pycli, "--write", expected=1)
     managed.write_bytes(original)
-    run(py, "uv", "add", "--dev", "project-presets-demo @ " + (artifacts / "project_presets_demo-2.0.0-py3-none-any.whl").as_uri())
-    run(py, *pycli, "--check", expected=1)
     for consumer in [ts, py]:
+        if consumer == ts:
+            source = remote + "/project-presets-demo-2.0.0.tgz"
+            update_cli = ["npx", "--yes", "--allow-remote=root", "--ignore-scripts", source, "typescript-node"]
+        else:
+            source = (artifacts / "project_presets_demo-2.0.0-py3-none-any.whl").as_uri()
+            update_cli = ["uvx", "--python", "3.12", "--from", source, "project-presets-python", "python-scripts"]
+        run(consumer, *update_cli, "--check", expected=1)
+        run(consumer, *update_cli, "--setup", "--source", source)
+        run(consumer, *update_cli, "--check")
         updater = [sys.executable, str(ROOT / "scripts/update-consumer.py"), "--artifacts", str(artifacts)]
         run(consumer, *updater, "--version", "bad-version", expected=1)
         run(consumer, *updater, "--version", "2.0.0")
@@ -213,14 +231,16 @@ requires-python = ">=3.12,<3.13"
 [tool.consumer]
 keep = "application-owned"
 ''')
-        run(consumer, "uv", "add", "--dev", "project-presets-demo @ " + (artifacts / "project_presets_demo-1.0.0-py3-none-any.whl").as_uri())
         profile = f"python-{kind}"
+        one_shot = ["uvx", "--python", "3.12", "--from", wheel, "project-presets-python", profile]
         cli = [str(consumer / ".venv/bin/project-presets-python"), profile]
         before = (consumer / "pyproject.toml").read_bytes()
-        run(consumer, *cli)
+        run(consumer, *one_shot)
         assert (consumer / "pyproject.toml").read_bytes() == before
         assert not (consumer / ".project-preset.json").exists()
-        run(consumer, "uv", "run", "--locked", "project-presets-python", profile, "--setup")
+        assert not (consumer / ".venv").exists()
+        run(consumer, *one_shot, "--setup", "--source", wheel)
+        run(consumer, *one_shot, "--check")
         run(consumer, *cli, "--check")
         with (consumer / "pyproject.toml").open("a") as file:
             file.write('\n[tool.ruff.lint]\nignore = ["F401"]\n')

@@ -4,24 +4,30 @@ import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { resolve, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { parseArgs } from 'node:util';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const catalog = JSON.parse(readFileSync(join(root, 'profiles.json'), 'utf8'));
 const release = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).version;
-const args = process.argv.slice(2);
-assert(args.every((arg) => !arg.startsWith('--') || ['--setup', '--write', '--check', '--adopt', '--sync'].includes(arg)), 'Unknown option');
-assert(args.filter((arg) => ['--setup', '--write', '--check'].includes(arg)).length <= 1, 'Choose --setup, --write or --check');
-const write = args.includes('--setup') || args.includes('--write');
-const sync = args.includes('--setup') || args.includes('--sync');
+const { values: options, positionals } = parseArgs({
+  options: {
+    setup: { type: 'boolean' }, write: { type: 'boolean' }, check: { type: 'boolean' },
+    adopt: { type: 'boolean' }, sync: { type: 'boolean' }, source: { type: 'string' },
+  },
+  allowPositionals: true,
+});
+assert([options.setup, options.write, options.check].filter(Boolean).length <= 1, 'Choose --setup, --write or --check');
+assert(options.source === undefined || /^(https?:\/\/|file:|git\+)/.test(options.source), '--source must be an artifact URL or a Git source');
+const write = options.setup || options.write;
+const sync = options.setup || options.sync;
 assert(!sync || write, '--sync requires --write or --setup');
-const positional = args.filter((arg) => !arg.startsWith('--'));
-assert(positional.length >= 1 && positional.length <= 2, 'Usage: project-presets PROFILE [DIRECTORY] [--setup | --write | --check] [--adopt] [--sync]');
-const [id, directory = '.'] = positional;
+assert(positionals.length >= 1 && positionals.length <= 2, 'Usage: project-presets PROFILE [DIRECTORY] [--setup | --write | --check] [--adopt] [--sync] [--source URL]');
+const [id, directory = '.'] = positionals;
 assert(Object.hasOwn(catalog, id), `Unknown profile: ${id}. Choose ${Object.keys(catalog).join(', ')}`);
 const profile = catalog[id];
 if (profile.language === 'python') {
   console.log(JSON.stringify(profile, null, 2));
-  assert(!write && !args.includes('--check'), 'Python uses the wheel and project-presets-python; see README');
+  assert(!write && !options.check, 'Python uses the wheel and project-presets-python; see README');
 } else {
   const target = resolve(directory);
   const path = (name) => join(target, name);
@@ -35,7 +41,7 @@ if (profile.language === 'python') {
   };
   for (const name of Object.keys(files)) {
     assert(!previous || existsSync(path(name)), `${name} was deleted locally; restore before updating`);
-    assert(previous || args.includes('--adopt') || !existsSync(path(name)), `${name} exists; integrate the documented import/extends, then use --adopt to preserve it`);
+    assert(previous || options.adopt || !existsSync(path(name)), `${name} exists; integrate the documented import/extends, then use --adopt to preserve it`);
   }
   const changes = [];
   for (const field of ['dependencies', 'devDependencies']) {
@@ -53,9 +59,12 @@ if (profile.language === 'python') {
     }
   }
   assert(!Object.hasOwn(manifest.dependencies, 'project-presets-demo'), 'The preset package must be a devDependency');
-  const source = manifest.devDependencies['project-presets-demo'] ?? release;
-  assert(typeof source === 'string', 'Invalid preset dependency');
-  // Preserve explicit artifact URLs and Git sources; registry installs use an exact version.
+  const base = 'https://github.com/omitsuhashi/project-presets-demo/releases/download/';
+  const artifact = `${base}v${release}/project-presets-demo-${release}.tgz`;
+  const previousSource = manifest.devDependencies['project-presets-demo'];
+  assert(previousSource === undefined || typeof previousSource === 'string', 'Invalid preset dependency');
+  const source = options.source ?? (previousSource === undefined || previousSource.startsWith(base) ? artifact : previousSource);
+  // Official releases follow the executing CLI; custom sources remain explicit.
   manifest.devDependencies['project-presets-demo'] = source.startsWith('git+')
     ? `${source.split('#')[0]}#v${release}`
     : /^(https?:|file:)/.test(source) ? source : release;
@@ -65,9 +74,9 @@ if (profile.language === 'python') {
     [marker]: JSON.stringify(state, null, 2) + '\n',
     ...Object.fromEntries(Object.entries(files).filter(([name]) => !existsSync(path(name)))),
   };
-  console.log(JSON.stringify({ profile: id, release, changes, create: Object.keys(writes).filter((name) => !existsSync(path(name))) }, null, 2));
-  if (args.includes('--check')) {
-    assert(manifest.devDependencies['project-presets-demo'] === source, 'Pin the manifest to the installed preset release');
+  console.log(JSON.stringify({ profile: id, release, source: manifest.devDependencies['project-presets-demo'], changes, create: Object.keys(writes).filter((name) => !existsSync(path(name))) }, null, 2));
+  if (options.check) {
+    assert(manifest.devDependencies['project-presets-demo'] === previousSource, 'Pin the manifest to the executing preset release');
     assert(previous?.release === release && changes.length === 0 && Object.keys(files).every((name) => existsSync(path(name))), 'Apply this preset release and regenerate the npm lock before merging');
     const lock = JSON.parse(readFileSync(path('package-lock.json'), 'utf8'));
     for (const field of ['dependencies', 'devDependencies']) {
@@ -98,6 +107,8 @@ if (profile.language === 'python') {
       if (/^https?:/.test(source)) flags.push('--allow-remote=root');
       execFileSync('npm', ['install', '--package-lock-only', ...flags], { cwd: target, stdio: 'inherit' });
       execFileSync('npm', ['ci', ...flags], { cwd: target, stdio: 'inherit' });
+      const lock = JSON.parse(readFileSync(path('package-lock.json'), 'utf8'));
+      assert(lock.packages['node_modules/project-presets-demo']?.version === release, 'The source must contain the executing preset release');
     }
   }
 }

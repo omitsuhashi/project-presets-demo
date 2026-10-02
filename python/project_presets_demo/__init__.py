@@ -11,6 +11,16 @@ from pathlib import Path
 import tomllib
 
 
+def check_environment(target, versions):
+    installed = json.loads(subprocess.check_output([
+        "uv", "run", "--no-sync", "python", "-c",
+        "import importlib.metadata as m,json,sys; print(json.dumps({name:m.version(name) for name in sys.argv[1:]}))",
+        *versions,
+    ], cwd=target, text=True))
+    if installed != versions:
+        raise ValueError("Sync the executing preset release and its dependencies in the project environment")
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("profile", choices=["python-scripts", "python-django", "python-fastapi"])
@@ -21,6 +31,7 @@ def main():
     mode.add_argument("--check", action="store_true")
     parser.add_argument("--adopt", action="store_true")
     parser.add_argument("--sync", action="store_true")
+    parser.add_argument("--source", help="Override the default GitHub release wheel URL")
     args = parser.parse_args()
     args.write = args.write or args.setup
     args.sync = args.sync or args.setup
@@ -33,12 +44,23 @@ def main():
 def apply(args):
     if args.sync and not args.write:
         raise ValueError("--sync requires --write or --setup")
+    if args.source is not None and not re.match(r"^(https?://|file://)", args.source):
+        raise ValueError("--source must be a wheel URL")
     target = Path(args.directory).resolve()
     manifest_path = target / "pyproject.toml"
     text = manifest_path.read_text()
     manifest = tomllib.loads(text)
     release = metadata.version("project-presets-demo")
     ruff = next(item.removeprefix("ruff==") for item in metadata.requires("project-presets-demo") if item.startswith("ruff=="))
+    base = "https://github.com/omitsuhashi/project-presets-demo/releases/download/"
+    artifact = args.source or f"{base}v{release}/project_presets_demo-{release}-py3-none-any.whl"
+    dev = manifest.get("dependency-groups", {}).get("dev", [])
+    has_preset = any(isinstance(item, str) and re.split(r"[^a-z0-9_-]", item.lower().strip(), maxsplit=1)[0].replace("_", "-") == "project-presets-demo" for item in dev)
+    preset_source = manifest.get("tool", {}).get("uv", {}).get("sources", {}).get("project-presets-demo", {})
+    public_source = isinstance(preset_source, dict) and preset_source.get("url", "").startswith(base)
+    install_preset = bool(args.source) or not has_preset or public_source
+    if any(re.split(r"[^a-z0-9_-]", item.lower().strip(), maxsplit=1)[0].replace("_", "-") == "project-presets-demo" for item in manifest["project"].get("dependencies", [])):
+        raise ValueError("The preset package must be a dev dependency")
     kind = args.profile.removeprefix("python-")
     dependencies = {}
     for requirement in metadata.requires("project-presets-demo"):
@@ -89,22 +111,26 @@ def apply(args):
     state = {"profile": args.profile, "release": release, "files": hashes, "devDependencies": {"ruff": ruff}}
     if dependencies:
         state["dependencies"] = dependencies
-    print(json.dumps({"profile": args.profile, "release": release, "ruff": ruff, "dependencies": dependencies, "files": list(hashes)}, indent=2))
+    print(json.dumps({"profile": args.profile, "release": release, "source": artifact if install_preset else preset_source, "ruff": ruff, "dependencies": dependencies, "files": list(hashes)}, indent=2))
     if args.check:
-        if previous != state or config is None:
+        if previous != state or config is None or not has_preset:
             raise ValueError("Apply the installed preset before merging")
         for name, digest in hashes.items():
             if hashlib.sha256((target / name).read_bytes()).hexdigest() != digest:
                 raise ValueError(f"Apply the installed preset for {name}")
         locked = tomllib.loads((target / "uv.lock").read_text())["package"]
         versions = {item["name"]: item["version"] for item in locked}
-        if versions.get("project-presets-demo") != release or versions.get("ruff") != ruff or metadata.version("ruff") != ruff:
+        if versions.get("project-presets-demo") != release or versions.get("ruff") != ruff:
             raise ValueError("Sync the preset and Ruff with the uv lock before merging")
         for name, version in dependencies.items():
-            if f"{name}=={version}" not in [item.lower().strip() for item in manifest["project"].get("dependencies", [])] or versions.get(name) != version or metadata.version(name) != version:
+            if f"{name}=={version}" not in [item.lower().strip() for item in manifest["project"].get("dependencies", [])] or versions.get(name) != version:
                 raise ValueError(f"Sync the runtime dependency {name} with the uv lock before merging")
         subprocess.run(["uv", "lock", "--check"], cwd=target, check=True)
+        check_environment(target, {"project-presets-demo": release, "ruff": ruff, **dependencies})
     if args.write:
+        if install_preset:
+            subprocess.run(["uv", "add", "--dev", "--no-sync", f"project-presets-demo @ {artifact}"], cwd=target, check=True)
+            text = manifest_path.read_text()
         if dependencies:
             subprocess.run(["uv", "add", "--no-sync", *(f"{name}=={version}" for name, version in dependencies.items())], cwd=target, check=True)
             text = manifest_path.read_text()
@@ -124,3 +150,4 @@ def apply(args):
             temporary.replace(destination)
         if args.sync:
             subprocess.run(["uv", "sync", "--locked"], cwd=target, check=True)
+            check_environment(target, {"project-presets-demo": release, "ruff": ruff, **dependencies})
