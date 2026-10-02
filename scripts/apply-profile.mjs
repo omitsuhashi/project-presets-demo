@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { resolve, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -8,10 +9,11 @@ const root = fileURLToPath(new URL('../', import.meta.url));
 const catalog = JSON.parse(readFileSync(join(root, 'profiles.json'), 'utf8'));
 const release = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).version;
 const args = process.argv.slice(2);
-assert(args.every((arg) => !arg.startsWith('--') || ['--write', '--check', '--adopt'].includes(arg)), 'Unknown option');
+assert(args.every((arg) => !arg.startsWith('--') || ['--write', '--check', '--adopt', '--sync'].includes(arg)), 'Unknown option');
 assert(!(args.includes('--write') && args.includes('--check')), 'Choose --write or --check');
+assert(!args.includes('--sync') || args.includes('--write'), '--sync requires --write');
 const positional = args.filter((arg) => !arg.startsWith('--'));
-assert(positional.length >= 1 && positional.length <= 2, 'Usage: project-presets PROFILE [DIRECTORY] [--write | --check] [--adopt]');
+assert(positional.length >= 1 && positional.length <= 2, 'Usage: project-presets PROFILE [DIRECTORY] [--write | --check] [--adopt] [--sync]');
 const [id, directory = '.'] = positional;
 assert(Object.hasOwn(catalog, id), `Unknown profile: ${id}. Choose ${Object.keys(catalog).join(', ')}`);
 const profile = catalog[id];
@@ -30,6 +32,7 @@ if (profile.language === 'python') {
     'tsconfig.json': JSON.stringify({ extends: `project-presets-demo/tsconfig/${profile.tsconfig}.json` }, null, 2) + '\n',
   };
   for (const name of Object.keys(files)) {
+    assert(!previous || existsSync(path(name)), `${name} was deleted locally; restore before updating`);
     assert(previous || args.includes('--adopt') || !existsSync(path(name)), `${name} exists; integrate the documented import/extends, then use --adopt to preserve it`);
   }
   const changes = [];
@@ -48,9 +51,12 @@ if (profile.language === 'python') {
     }
   }
   assert(!Object.hasOwn(manifest.dependencies, 'project-presets-demo'), 'The preset package must be a devDependency');
-  const source = manifest.devDependencies['project-presets-demo'] ?? 'git+https://github.com/omitsuhashi/project-presets-demo.git';
-  assert(typeof source === 'string' && source.startsWith('git+'), 'Use a Git dependency for this demo preset package');
-  manifest.devDependencies['project-presets-demo'] = `${source.split('#')[0]}#v${release}`;
+  const source = manifest.devDependencies['project-presets-demo'] ?? release;
+  assert(typeof source === 'string', 'Invalid preset dependency');
+  // Preserve explicit artifact URLs and Git sources; registry installs use an exact version.
+  manifest.devDependencies['project-presets-demo'] = source.startsWith('git+')
+    ? `${source.split('#')[0]}#v${release}`
+    : /^(https?:|file:)/.test(source) ? source : release;
   const state = { profile: id, release, dependencies: profile.dependencies, devDependencies: profile.devDependencies };
   const writes = {
     'package.json': JSON.stringify(manifest, null, 2) + '\n',
@@ -59,7 +65,16 @@ if (profile.language === 'python') {
   };
   console.log(JSON.stringify({ profile: id, release, changes, create: Object.keys(writes).filter((name) => !existsSync(path(name))) }, null, 2));
   if (args.includes('--check')) {
+    assert(manifest.devDependencies['project-presets-demo'] === source, 'Pin the manifest to the installed preset release');
     assert(previous?.release === release && changes.length === 0 && Object.keys(files).every((name) => existsSync(path(name))), 'Apply this preset release and regenerate the npm lock before merging');
+    const lock = JSON.parse(readFileSync(path('package-lock.json'), 'utf8'));
+    for (const field of ['dependencies', 'devDependencies']) {
+      for (const [name, version] of Object.entries(profile[field])) {
+        assert(lock.packages[''][field]?.[name] === version && lock.packages[`node_modules/${name}`]?.version === version, `Regenerate the npm lock for ${name}`);
+      }
+    }
+    assert(lock.packages['node_modules/project-presets-demo']?.version === release, 'The npm lock has a different preset release');
+    assert(lock.packages[''].devDependencies?.['project-presets-demo'] === source, 'The npm lock and manifest use different preset sources');
   }
   if (args.includes('--write')) {
     // Validate and stage every file before replacing any destination.
@@ -74,6 +89,12 @@ if (profile.language === 'python') {
     } catch (error) {
       // Staged files are retained for recovery if the filesystem rejects a write.
       throw new Error(`Preset write failed; inspect .preset-${process.pid} files before retrying`, { cause: error });
+    }
+    if (args.includes('--sync')) {
+      const flags = ['--ignore-scripts', '--no-audit', '--no-fund'];
+      if (source.startsWith('git+')) flags.push('--allow-git=root');
+      execFileSync('npm', ['install', '--package-lock-only', ...flags], { cwd: target, stdio: 'inherit' });
+      execFileSync('npm', ['ci', ...flags], { cwd: target, stdio: 'inherit' });
     }
   }
 }

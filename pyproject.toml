@@ -1,0 +1,23 @@
+[project]
+name = "project-presets-demo"
+version = "1.1.0"
+description = "Versioned Python project presets and update CLI"
+readme = "README.md"
+requires-python = ">=3.12"
+license = "MIT"
+license-files = ["LICENSE"]
+dependencies = ["ruff==0.16.10"]
+
+[project.urls]
+Repository = "https://github.com/omitsuhashi/project-presets-demo"
+
+[project.scripts]
+project-presets-python = "project_presets_demo:main"
+
+[build-system]
+requires = ["uv_build>=0.11.7,<0.12"]
+build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-root = "python"
+module-name = "project_presets_demo"

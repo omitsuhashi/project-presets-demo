@@ -1,4 +1,1 @@
-extend = "base.toml"
-
-[lint]
-extend-select = ["T20"]
+extend = "project_presets_demo/config/service.toml"

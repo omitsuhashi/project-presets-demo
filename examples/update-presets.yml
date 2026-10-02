@@ -1,0 +1,29 @@
+# Copy to .github/workflows/update-presets.yml in the consumer repository.
+name: Update preset packages
+
+on:
+  schedule:
+    - cron: '15 2 * * 1'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version, e.g. 1.1.0. Empty follows the current major.'
+        default: ''
+        type: string
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: update-preset-packages
+  cancel-in-progress: false
+
+jobs:
+  update:
+    uses: omitsuhashi/project-presets-demo/.github/workflows/update-consumer.yml@v1.1.0
+    with:
+      version: ${{ inputs.version || '' }}
+      # For Python applications, set actual tests here, for example:
+      # test-command: uv run --locked python -m unittest discover
+      # directory: .
