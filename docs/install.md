@@ -2,11 +2,15 @@
 
 利用側の担当者が、Profile を一つ選び、固定した配布版と設定・lockfile を Git に保存するための手順です。初回導入後の更新は [利用側の更新・復旧](update.md) を使います。
 
-この手順は公開済みの `v1.4.0` を使います。TypeScript は Node.js 24 / npm 12、Python は Python 3.12 / uv 0.11.7 で検証しています。npm・PyPI のアカウント、GitHub 認証、Git submodule は初回導入には不要です。ツールの導入は [Node.js](https://nodejs.org/en/download) / [uv](https://docs.astral.sh/uv/getting-started/installation/) を参照してください。
+この手順は公開済みの `v1.5.0` を使います。TypeScript は Node.js 24 / npm 12、Python は Python 3.12 / uv 0.11.7 で検証しています。npm・PyPI のアカウント、GitHub 認証、Git submodule は初回導入には不要です。ツールの導入は [Node.js](https://nodejs.org/en/download) / [uv](https://docs.astral.sh/uv/getting-started/installation/) を参照してください。
 
-**事前の `npm install` / `uv add` は不要です。** `npx` / `uvx` が固定版の CLI を一時取得し、`--setup` が設定・依存・lockfile を一括適用します。繰り返し実行でき、案件固有の設定を保持します。書き込み前に確認したい場合は `--setup` を外すと preview、適用後の確認は `--check` です。従来の `--write --sync` も同じ処理として利用できます。
+**事前の `npm init` / `uv init` / `npm install` / `uv add` は不要です。** `npx` / `uvx` が固定版の CLI を一時取得し、`--setup` が manifest・設定・依存・lockfile を一括適用します。繰り返し実行でき、案件固有の設定を保持します。書き込み前に確認したい場合は `--setup` を外すと preview、適用後の確認は `--check` です。従来の `--write --sync` も同じ処理として利用できます。
 
-Node.js / npm または Python / uv と、利用側の `package.json` / `pyproject.toml` が前提です。新規案件の manifest 作成例を以下に含めています。アプリのコード、DB、secret、本番環境は案件側で用意します。
+Node.js / npm または Python / uv が前提です。初回の `package.json` / `pyproject.toml` は自動作成します。アプリのコード、DB、secret、本番環境は案件側で用意します。
+
+初期化時の project 名はディレクトリ名から作り、空白・日本語などを除いたパッケージ名に正規化します。有効な文字が残らない場合は `project` を使います。TypeScript は `version: 0.0.0` / `private: true` / `type: module`、Python は `version = "0.0.0"` / `requires-python = ">=3.12,<3.13"` を初期値にします。既存 manifest の名前・版・追加依存・設定を保持します。
+
+ディレクトリ引数は両 CLI で `PROFILE DIRECTORY --setup` の順です。未作成のディレクトリと親ディレクトリも自動で作ります。preview と `--check` は初期化しません。導入済み marker がある状態で manifest が削除されていたら、Git からの復旧を案内して停止します。既存ファイルの構文エラーや設定・依存の競合も保持したまま停止するので、原因を解消して再実行します。一つのディレクトリには一つの Profile を適用し、TypeScript と Python は別ディレクトリを使います。
 
 ## TypeScript
 
@@ -15,11 +19,8 @@ Node.js / npm または Python / uv と、利用側の `package.json` / `pyproje
 ```sh
 mkdir typescript-demo
 cd typescript-demo
-npm init -y
-npm pkg set type=module
-npm pkg delete scripts.test
 
-PRESET_VERSION=1.4.0
+PRESET_VERSION=1.5.0
 # 初回に一つ選ぶ。node / hono / next はそれぞれ別の構成。
 PRESET_PROFILE=typescript-node
 npx --yes --allow-remote=root --ignore-scripts \
@@ -71,10 +72,8 @@ git commit -m "Adopt TypeScript project preset"
 ```sh
 mkdir python-demo
 cd python-demo
-uv init --bare --name python-demo --python 3.12
-uv python pin 3.12
 
-PRESET_VERSION=1.4.0
+PRESET_VERSION=1.5.0
 # 初回に一つ選ぶ。scripts / django / fastapi はそれぞれ別の構成。
 PRESET_PROFILE=python-scripts
 uvx --python 3.12 \
@@ -138,7 +137,7 @@ scripts は `scripts.toml`、FastAPI は `fastapi.toml` を使います。コピ
 検証後、次を commit します。
 
 ```sh
-git add pyproject.toml uv.lock .python-version .project-preset.json .project-presets/ruff
+git add pyproject.toml uv.lock .project-preset.json .project-presets/ruff
 # アプリのコードと .gitignore も別途追加する。
 git commit -m "Adopt Python project preset"
 ```
@@ -147,12 +146,12 @@ git commit -m "Adopt Python project preset"
 
 ## 既存案件
 
-導入用 branch で、既存の manifest とアプリテストを使います。既存設定の参照を共通設定に統合してから、上記の一時実行コマンドに `--adopt` を付けて実行します。新規用の `npm init` / `uv init` / `scripts.test` の削除は行いません。管理対象の依存が未導入なら CLI が追加します。既存の版が競合する場合は、[profiles.json](../profiles.json) の exact pin に合わせてから登録します。Python の既存依存を揃える時も `uv add` で manifest / lock を更新します。
+導入用 branch で、既存の manifest とアプリテストを使います。既存設定の参照を共通設定に統合してから、上記の一時実行コマンドに `--adopt` を付けて実行します。管理対象の依存が未導入なら CLI が追加します。既存の版が競合する場合は、[profiles.json](../profiles.json) の exact pin に合わせてから登録します。Python の既存依存を揃える時も `uv add` で manifest / lock を更新します。
 
 既存設定を保持したまま登録するには、選んだ Profile で `--adopt --setup` を使います。その後に `--check`、lint、型チェック、アプリのテストを実行して導入 PR をレビューします。`--adopt` は依存の競合や Profile 切替を強制するオプションではありません。
 
 ```sh
-PRESET_VERSION=1.4.0
+PRESET_VERSION=1.5.0
 # TypeScript / Hono の既存案件の例
 npx --yes --allow-remote=root --ignore-scripts \
   "https://github.com/omitsuhashi/project-presets-demo/releases/download/v${PRESET_VERSION}/project-presets-demo-${PRESET_VERSION}.tgz" \

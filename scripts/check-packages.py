@@ -108,6 +108,45 @@ with tempfile.TemporaryDirectory(prefix="project-presets-packages-") as director
         run(provider, "npm", "pack", "--ignore-scripts", "--pack-destination", str(artifacts))
         run(provider, "uv", "build", "--out-dir", str(artifacts))
 
+    # Real npx / uvx entry points must bootstrap projects without manifests.
+    for profile, settings in catalog.items():
+        consumer = temp / "empty projects" / f"日本語 {profile}"
+        npm_source = remote + "/project-presets-demo-2.0.0.tgz"
+        wheel_source = (artifacts / "project_presets_demo-2.0.0-py3-none-any.whl").as_uri()
+        typescript = settings["language"] == "typescript"
+        source = npm_source if typescript else wheel_source
+        entry = (["npx", "--yes", "--allow-remote=root", "--ignore-scripts", source, profile]
+                 if typescript else ["uvx", "--python", "3.12", "--from", source, "project-presets-python", profile])
+        if profile in {"typescript-node", "python-django"}:
+            consumer.mkdir(parents=True)
+        existed = consumer.exists()
+        preview = json.loads(run(temp, *entry, str(consumer), "--source", source))
+        assert preview["profile"] == profile
+        assert ("package.json" if typescript else "pyproject.toml") in preview["create"]
+        assert consumer.exists() == existed
+        assert not consumer.exists() or not list(consumer.iterdir()), "Preview must not create project files"
+        run(temp, *entry, str(consumer), "--check", "--source", source, expected=1)
+        assert consumer.exists() == existed
+        assert not consumer.exists() or not list(consumer.iterdir())
+        run(temp, *entry, str(consumer), "--setup", "--source", source)
+        run(temp, *entry, str(consumer), "--check", "--source", source)
+        name = "package.json" if typescript else "pyproject.toml"
+        text = (consumer / name).read_bytes()
+        created = json.loads(text) if typescript else tomllib.loads(text.decode())["project"]
+        assert created["name"] == profile
+        assert created["version"] == "0.0.0"
+        if typescript:
+            assert created["dependencies"] == settings.get("dependencies", {})
+            assert created["private"] and created["type"] == "module"
+        else:
+            assert created["requires-python"] == ">=3.12,<3.13"
+        run(temp, *entry, str(consumer), "--setup", "--source", source)
+        assert (consumer / name).read_bytes() == text, "Repeat setup must preserve the manifest"
+        (consumer / name).unlink()
+        run(temp, *entry, str(consumer), "--setup", "--source", source, expected=1)
+        assert not (consumer / name).exists(), "A deleted adopted manifest needs recovery, not reinitialization"
+        print(f"PASS: {profile} initializes a missing directory/manifest, previews without writes and rejects deleted manifests")
+
     ts, py = temp / "typescript", temp / "python"
     init(ts)
     init(py)

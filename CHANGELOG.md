@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.5.0
+
+- TypeScript / Python の初回導入で `package.json` / `pyproject.toml` がなければ自動作成。事前の `npm init` / `uv init` が不要になり、空ディレクトリから `npx` / `uvx` の `--setup` 一回で依存・設定・native lock を揃える。
+- 指定先の未作成ディレクトリも初期化し、空白・日本語を含むディレクトリ名から有効な project 名を生成。Python の新規 project は Python 3.12 を使用。
+- preview / `--check` は初期化しない。導入済み manifest の削除は復旧を案内して停止し、既存の依存情報を初期値で置き換えない。
+- 全6構成を実際の tarball / wheel から空ディレクトリへ導入し、再実行・整合チェック・既存設定保持・更新 / revert を検証。導入・更新・公開の手順を更新。
+
+Profile の依存版・lint ルールは 1.4.0 と同じ。既存案件は通常の更新手順を利用できる。公開済みの 1.4.0 は差し替えず、新規初期化には 1.5.0 を使う。
+
 ## 1.4.0
 
 - `npx` / `uvx` から事前導入なしに `--setup` を実行可能。CLI が実行版と同じ GitHub Release を開発用依存へ登録し、Linter・選択したフレームワーク・設定・native lock を揃える。

@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { existsSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
-import { resolve, join } from 'node:path';
+import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
+import { basename, resolve, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 
@@ -31,9 +31,16 @@ if (profile.language === 'python') {
 } else {
   const target = resolve(directory);
   const path = (name) => join(target, name);
-  const manifest = JSON.parse(readFileSync(path('package.json'), 'utf8'));
   const marker = '.project-preset.json';
   const previous = existsSync(path(marker)) ? JSON.parse(readFileSync(path(marker), 'utf8')) : null;
+  const initialize = !existsSync(path('package.json'));
+  assert(!initialize || !previous, 'package.json was deleted locally; restore it before updating');
+  assert(!initialize || !options.check, 'Run --setup to create package.json and apply this preset');
+  const name = basename(target).toLowerCase().replace(/[^a-z0-9._-]+/g, '-').replace(/^[._-]+|[._-]+$/g, '').slice(0, 214) || 'project';
+  const manifest = initialize
+    ? { name, version: '0.0.0', private: true, type: 'module' }
+    : JSON.parse(readFileSync(path('package.json'), 'utf8'));
+  assert(manifest && typeof manifest === 'object' && !Array.isArray(manifest), 'package.json must contain a JSON object');
   assert(!previous || previous.profile === id, 'Changing frameworks requires an application migration; use a separate project');
   const files = {
     'eslint.config.mjs': `import preset from 'project-presets-demo/${profile.eslint}';\n\nexport default preset;\n`,
@@ -89,6 +96,7 @@ if (profile.language === 'python') {
   }
   if (write) {
     // Validate and stage every file before replacing any destination.
+    mkdirSync(target, { recursive: true });
     const staged = [];
     try {
       for (const [name, content] of Object.entries(writes)) {

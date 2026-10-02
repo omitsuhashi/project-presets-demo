@@ -4,21 +4,21 @@
 
 ## 最初の導入
 
-既存の `package.json` / `pyproject.toml` があるプロジェクトでは、`npx` / `uvx` から CLI 一回で設定・必要な依存・lockfile が揃います。配布パッケージの事前インストールも、Linter やフレームワークの個別インストールも不要です。
+空のディレクトリから、`npx` / `uvx` の CLI 一回で manifest・設定・必要な依存・lockfile が揃います。`package.json` / `pyproject.toml` がなければ自動作成します。配布パッケージの事前インストールも、Linter やフレームワークの個別インストールも不要です。
 
 ```sh
 # TypeScript: node / hono / next のいずれかを選ぶ
 npx --yes --allow-remote=root --ignore-scripts \
-  https://github.com/omitsuhashi/project-presets-demo/releases/download/v1.4.0/project-presets-demo-1.4.0.tgz \
+  https://github.com/omitsuhashi/project-presets-demo/releases/download/v1.5.0/project-presets-demo-1.5.0.tgz \
   typescript-node --setup
 
 # Python: scripts / django / fastapi のいずれかを選ぶ
 uvx --python 3.12 \
-  --from https://github.com/omitsuhashi/project-presets-demo/releases/download/v1.4.0/project_presets_demo-1.4.0-py3-none-any.whl \
+  --from https://github.com/omitsuhashi/project-presets-demo/releases/download/v1.5.0/project_presets_demo-1.5.0-py3-none-any.whl \
   project-presets-python python-django --setup
 ```
 
-既存の lint 設定がある場合は、[導入手順の既存案件](docs/install.md#既存案件) に従って参照を統合し `--adopt --setup` を使います。Node.js / npm・Python / uv の導入、新規 manifest の作成手順も導入手順に記載しています。オプションなしは preview、`--check` は整合性の確認です。CLI が採用版の共通パッケージも開発用依存に登録するため、CI では npm / uv lock から同じ設定を再現できます。
+既存の lint 設定がある場合は、[導入手順の既存案件](docs/install.md#既存案件) に従って参照を統合し `--adopt --setup` を使います。Node.js / npm・Python / uv の導入も導入手順に記載しています。オプションなしは書き込みなしの preview、`--check` は整合性の確認です。未作成のディレクトリも `PROFILE DIRECTORY --setup` で初期化できます。CLI が採用版の共通パッケージも開発用依存に登録するため、CI では npm / uv lock から同じ設定を再現できます。
 
 ## 使い方・更新手順
 
@@ -47,7 +47,7 @@ ESLint 9 は [2026-08-06 に EOL](https://eslint.org/version-support/) です。
 
 ## 配布するものと管理する範囲
 
-[公開版 v1.4.0](https://github.com/omitsuhashi/project-presets-demo/releases/tag/v1.4.0) は npm tarball・Python wheel / sdist・`SHA256SUMS` を含みます。初回導入と明示した版の適用は、公開 URL から GitHub 認証なしで行えます。
+[公開版 v1.5.0](https://github.com/omitsuhashi/project-presets-demo/releases/tag/v1.5.0) は npm tarball・Python wheel / sdist・`SHA256SUMS` を含みます。初回導入と明示した版の適用は、公開 URL から GitHub 認証なしで行えます。
 
 - TypeScript: Profile の実行用 / 開発用依存と marker を管理。利用側は共通 package の設定を import / extends し、案件固有の上書きを保守。
 - Python: framework は実行用依存、preset / Ruff は開発用依存。コピーした共通設定と marker を管理し、案件固有の上書きは `pyproject.toml` で保守。
