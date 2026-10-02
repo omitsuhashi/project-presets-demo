@@ -59,6 +59,9 @@ python = tomllib.loads((ROOT / "pyproject.toml").read_text())
 catalog = json.loads((ROOT / "profiles.json").read_text())
 assert manifest["version"] == python["project"]["version"]
 assert python["project"]["dependencies"] == ["ruff==" + catalog["python-scripts"]["devDependencies"]["ruff"]]
+current_ruff = catalog["python-scripts"]["devDependencies"]["ruff"]
+current_node_types = catalog["typescript-node"]["devDependencies"]["@types/node"]
+assert (ROOT / "profiles/python-scripts/requirements-dev.txt").read_text().strip() == f"ruff=={current_ruff}"
 for name, requirements in python["project"]["optional-dependencies"].items():
     profile = catalog[f"python-{name}"]
     assert requirements == [f"{package}=={version}" for package, version in profile["dependencies"].items()]
@@ -83,7 +86,7 @@ with tempfile.TemporaryDirectory(prefix="project-presets-packages-") as director
             shutil.copytree(source, provider / name, ignore=shutil.ignore_patterns("__pycache__"))
         else:
             shutil.copy2(source, provider / name)
-    for release, ruff, node_types in [("1.0.0", "0.16.9", "24.19.0"), ("2.0.0", "0.16.10", "24.19.1")]:
+    for release, ruff, node_types in [("1.0.0", "0.16.9", "24.19.0"), ("2.0.0", current_ruff, current_node_types)]:
         manifest["version"] = release
         (provider / "package.json").write_text(json.dumps(manifest))
         catalog["typescript-node"]["devDependencies"]["@types/node"] = node_types
@@ -164,12 +167,12 @@ ignore = ["F401"]
         assert json.loads((consumer / ".project-preset.json").read_text())["release"] == "2.0.0"
         revision = commit(consumer, "Update packages and locks")
         if consumer == ts:
-            assert json.loads((ts / "package-lock.json").read_text())["packages"]["node_modules/@types/node"]["version"] == "24.19.1"
+            assert json.loads((ts / "package-lock.json").read_text())["packages"]["node_modules/@types/node"]["version"] == current_node_types
             assert (ts / "eslint.config.mjs").read_bytes() == ts_config
             assert (ts / "main.ts").read_bytes() == ts_source
             assert json.loads((ts / "package.json").read_text())["scripts"]["custom"] == "keep"
         else:
-            assert run(py, "uv", "run", "--locked", "ruff", "--version") == "ruff 0.16.10"
+            assert run(py, "uv", "run", "--locked", "ruff", "--version") == f"ruff {current_ruff}"
             assert tomllib.loads((py / "pyproject.toml").read_text())["tool"]["ruff"] == py_config
             assert (py / "main.py").read_bytes() == py_source
             assert 'extend-select = ["C4"]' in (py / ".project-presets/ruff/base.toml").read_text()
