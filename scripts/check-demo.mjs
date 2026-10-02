@@ -53,6 +53,13 @@ const pythonSettings = () => run(py, 'uv', ['run', '--locked', 'python', '-c',
 const uvLint = (expected = 0) => JSON.parse(run(py, 'uv', ['run', '--locked', 'ruff', 'check', 'main.py', '--output-format', 'json'], expected));
 
 try {
+  const declared = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
+  for (const profile of Object.values(JSON.parse(readFileSync(join(root, 'profiles.json'), 'utf8')))) {
+    if (profile.language !== 'typescript') continue;
+    for (const [name, version] of Object.entries({ ...profile.dependencies, ...profile.devDependencies })) {
+      assert.equal(declared.devDependencies[name], version, `Profile and validation dependency differ: ${name}`);
+    }
+  }
   init(provider);
   for (const path of ['package.json', 'typescript', 'python', 'profiles.json', 'profiles', 'scripts', 'LICENSE']) {
     cpSync(join(root, path), join(provider, path), { recursive: true });
