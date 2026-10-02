@@ -104,8 +104,10 @@ monorepo では `directory` を指定できます。同じ Profile が複数デ�
 
 ## 配布側の保守
 
+配布元の Dependabot は npm・uv・GitHub Actions の更新候補を毎週作ります。候補の版を採用する時は catalog と manifest を揃えて検証します。依存だけを更新した PR は整合性の CI で停止し、自動マージしません。Python の検査は `uv.lock` に固定した実際の Ruff を使います。
+
 1. Profile、パッケージ manifest、対応設定を変更し、代表アプリと更新・復旧のテストを通す。
-2. npm と Python の配布版を揃え、changelog に変更・互換性・移行方法を記載する。
+2. npm と Python の配布版を揃え、`npm install --package-lock-only` と `uv lock` で配布元の lock も更新し、changelog に変更・互換性・移行方法を記載する。
 3. 検証済み commit に `vX.Y.Z` を付けて push する。
 4. [release workflow](.github/workflows/release.yml) が再検証し、tarball・wheel・sdist・SHA256SUMS を含む Release を公開する。
 

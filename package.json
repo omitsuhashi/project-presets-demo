@@ -21,7 +21,7 @@
     "lint": "eslint typescript scripts eslint.config.mjs examples/typescript",
     "test": "node scripts/check-demo.mjs && npm run test:packages",
     "demo:ts": "eslint --config examples/typescript/eslint.config.mjs examples/typescript/main.ts",
-    "demo:py": "uvx --from ruff==0.16.10 ruff check examples/python",
+    "demo:py": "uv run --locked ruff check examples/python",
     "test:packages": "uv run --no-project --python 3.12 python scripts/check-packages.py"
   },
   "dependencies": {
