@@ -69,7 +69,7 @@ with tempfile.TemporaryDirectory(prefix="project-presets-packages-") as director
         catalog["typescript-node"]["devDependencies"]["@types/node"] = node_types
         catalog["python-scripts"]["devDependencies"]["ruff"] = ruff
         (provider / "profiles.json").write_text(json.dumps(catalog))
-        text = (ROOT / "pyproject.toml").read_text().replace(python["project"]["version"], release).replace("ruff==0.16.10", f"ruff=={ruff}")
+        text = (ROOT / "pyproject.toml").read_text().replace(python["project"]["version"], release).replace(python["project"]["dependencies"][0], f"ruff=={ruff}")
         (provider / "pyproject.toml").write_text(text)
         if release == "2.0.0":
             with (provider / "python/project_presets_demo/config/base.toml").open("a") as file:

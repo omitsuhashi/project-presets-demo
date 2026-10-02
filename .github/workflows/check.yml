@@ -23,9 +23,9 @@ jobs:
         with:
           version: '0.11.7'
       - run: npm ci --ignore-scripts
-      - run: uvx --from ruff==0.16.10 ruff --version
+      - run: uv lock --check
       - run: npm run lint
       - run: npm run demo:ts
       - run: npm run demo:py
-      - run: uvx --from ruff==0.16.10 ruff check --config python/base.toml python/project_presets_demo scripts/check-packages.py scripts/update-consumer.py
+      - run: uv run --locked ruff check --config python/base.toml python/project_presets_demo scripts/check-packages.py scripts/update-consumer.py
       - run: npm test
