@@ -1,6 +1,6 @@
 # 利用側の更新・適用・復旧
 
-導入済みの利用側担当者が、新しい配布版を一つの更新 PR にまとめ、検証・レビュー後に適用する手順です。初回は [導入手順](install.md) の「配布パッケージを導入 → CLI の `--setup`」、公開作業は [配布側の更新](publish.md) を使います。
+導入済みの利用側担当者が、新しい配布版を一つの更新 PR にまとめ、検証・レビュー後に適用する手順です。初回は [導入手順](install.md) の「`npx` / `uvx` から CLI の `--setup`」、公開作業は [配布側の更新](publish.md) を使います。
 
 **配布側が Release を公開しても、利用側のファイルや実行環境は自動では変わりません。** 手動または workflow が更新 PR を作り、利用側がマージした後、各環境で lock に沿って依存を再導入します。自動更新の対象は `.project-preset.json` がある案件です。
 
@@ -15,9 +15,11 @@ git status --short
 
 marker に現在の Profile / 配布版が記録されています。未 commit の作業は先に保存し、[Release notes](https://github.com/omitsuhashi/project-presets-demo/releases) から適用する版・移行作業を確認します。TypeScript の共通設定はパッケージ内なので、利用側の diff と併せて配布元のタグ間の差分も確認します。
 
+下表は更新 script / workflow の版指定です。一時実行 CLI は取得 URL に含めた固定版を使います。
+
 | 選び方 | 動作 |
 | --- | --- |
-| `--version 1.3.0` など明示 | 指定した公開版を選ぶ。major 更新・ダウングレードも明示指定 |
+| `--version 1.4.0` など明示 | 指定した公開版を選ぶ。major 更新・ダウングレードも明示指定 |
 | `--version` を省略 | 現在と同じ major で、現在以上の最新 stable Release を選ぶ |
 | Profile の変更 | アプリの移行が必要。通常の更新 CLI は停止する |
 
@@ -25,18 +27,50 @@ marker に現在の Profile / 配布版が記録されています。未 commit 
 
 ## 2. 手動で更新 PR を作る
 
+### 一時取得した CLI で更新する
+
+初回と同じ `npx` / `uvx` の入口を使えます。未 commit の作業を保存し、更新用 branch で、現在の Profile を変えずに新版を適用します。以下は Node.js / Python スクリプトの例です。Hono・Next.js・Django・FastAPI は marker の現在の Profile に置き換えます。
+
+```sh
+git switch -c codex/update-project-preset
+PRESET_VERSION=1.4.0
+# TypeScript の案件で実行
+npx --yes --allow-remote=root --ignore-scripts \
+  "https://github.com/omitsuhashi/project-presets-demo/releases/download/v${PRESET_VERSION}/project-presets-demo-${PRESET_VERSION}.tgz" \
+  typescript-node --setup
+npm exec -- project-presets typescript-node --check
+npm exec -- eslint .
+npm exec -- tsc --noEmit
+npm run build --if-present
+npm run test --if-present
+
+# Python の案件で実行
+uvx --python 3.12 \
+  --from "https://github.com/omitsuhashi/project-presets-demo/releases/download/v${PRESET_VERSION}/project_presets_demo-${PRESET_VERSION}-py3-none-any.whl" \
+  project-presets-python python-scripts --setup
+uv run --locked project-presets-python python-scripts --check
+uv run --locked ruff check .
+# この後に案件のアプリテストを実行する。
+```
+
+公式 Release の配布 URL は実行した CLI の版に更新されます。CLI の一時実行環境と利用側の環境は分かれます。Python の `--check` は利用側の依存・lock・インストール済み版を検査するため、`uvx` からも確認できます。
+
+`--setup` は設定・依存の適用と配布版の整合性までを扱います。上記の lint / 型チェック / build / test と、Django の `manage.py check` / `test` などは別途実行します。以下の更新 script を使うと、対応する検証まで自動実行します。検証後は本章の diff 確認・commit・レビュー・環境反映・復旧に従います。
+
+### 更新 script で適用と検証を実行する
+
 共通の [更新 script](../scripts/update-consumer.py) が TypeScript / Python を判別します。両言語で uv / Python 3.12 と Git を使い、TypeScript では Node.js 24 / npm も使います。明示した版の公開配布物の取得には GitHub 認証は不要です。最新版の自動検索は GitHub CLI (`gh`) の認証も必要です。
 
 script を利用側の外に用意します。以下は利用側のルートで実行する例です。`../preset-provider` が未使用のディレクトリであることを確認してください。
 
 ```sh
-git clone --depth 1 --branch v1.3.0 \
+git clone --depth 1 --branch v1.4.0 \
   https://github.com/omitsuhashi/project-presets-demo.git ../preset-provider
 
 git switch -c codex/update-project-preset
-# 1.3.0 は公開済み版での例。採用する新版に置き換える。
+# 1.4.0 は公開済み版での例。採用する新版に置き換える。
 uv run --no-project --python 3.12 python ../preset-provider/scripts/update-consumer.py \
-  --directory . --version 1.3.0
+  --directory . --version 1.4.0
 ```
 
 script は版を導入してからその版の CLI で管理対象を更新するため、**更新 script に全体の preview モードはありません**。最初の導入 CLI の書き込みなし表示は、インストール済み版についての確認です。更新は branch 上で行い、diff とテストを確認します。
@@ -51,7 +85,7 @@ uv run --no-project --python 3.12 python ../preset-provider/scripts/update-consu
 
 ```sh
 # PRESET_TOOL_VERSION を採用する公開済みのツール版に置き換える。
-PRESET_TOOL_VERSION=1.3.0
+PRESET_TOOL_VERSION=1.4.0
 git -C ../preset-provider fetch --depth 1 origin tag "v${PRESET_TOOL_VERSION}"
 git -C ../preset-provider switch --detach "v${PRESET_TOOL_VERSION}"
 ```
@@ -121,7 +155,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   update:
-    uses: omitsuhashi/project-presets-demo/.github/workflows/update-consumer.yml@v1.3.0
+    uses: omitsuhashi/project-presets-demo/.github/workflows/update-consumer.yml@v1.4.0
     with:
       version: ${{ inputs.version || '' }}
       test-command: uv run --locked python -m unittest discover

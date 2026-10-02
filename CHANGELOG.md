@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.4.0
+
+- `npx` / `uvx` から事前導入なしに `--setup` を実行可能。CLI が実行版と同じ GitHub Release を開発用依存へ登録し、Linter・選択したフレームワーク・設定・native lock を揃える。
+- 同じ入口から明示した新版へ更新可能。公式配布 URL は実行 CLI の版に追従し、採用版と設定を案件へ保存。
+- Python の依存確認は利用側の環境を検査。一時実行 CLI の環境に Django / FastAPI がなくても、利用側の導入・確認ができる。
+- ローカル artifact や別の配布先には `--source URL` を指定。既存の公式以外の配布元は保持。
+- 一時実行からの preview・導入・確認・更新、再実行、既存設定保持、既存更新 script と revert を検証。導入・更新・公開の手順を更新。
+
+既存の事前導入、`npm exec` / `uv run`、`--write --sync`、`--check` は引き続き利用可能。Profile の依存版・lint ルールは 1.3.0 と同じ。Node.js / npm または Python / uv と利用側 manifest が前提。公開済み配布物は差し替えない。
+
 ## 1.3.0
 
 - TypeScript / Python CLI に `--setup` を追加。設定の適用・Profile の依存登録・native lock の更新・依存のインストールを一回で実行。

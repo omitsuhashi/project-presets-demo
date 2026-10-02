@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Version, e.g. 1.3.0. Empty follows the current major.'
+        description: 'Version, e.g. 1.4.0. Empty follows the current major.'
         default: ''
         type: string
 
@@ -21,7 +21,7 @@ concurrency:
 
 jobs:
   update:
-    uses: omitsuhashi/project-presets-demo/.github/workflows/update-consumer.yml@v1.3.0
+    uses: omitsuhashi/project-presets-demo/.github/workflows/update-consumer.yml@v1.4.0
     with:
       version: ${{ inputs.version || '' }}
       # For Python applications, set actual tests here, for example:

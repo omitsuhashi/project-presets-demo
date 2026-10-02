@@ -144,10 +144,8 @@ ignore = ["F401"]\n`);
     const consumer = join(temp, id);
     mkdirSync(consumer);
     writeFileSync(join(consumer, 'package.json'), '{"name":"framework-consumer","private":true,"type":"module","scripts":{"custom":"keep"}}\n');
-    run(consumer, 'npm', ['install', '--package-lock-only', '--allow-git=root', '--ignore-scripts', '--no-audit', '--no-fund', '--save-dev', '--save-exact',
-      `git+file://${provider}#v1.0.0`]);
-    run(consumer, 'npm', ['ci', '--allow-git=root', '--ignore-scripts', '--no-audit', '--no-fund']);
-    run(consumer, 'npm', ['exec', '--', 'project-presets', id, '--setup']);
+    const source = `git+file://${provider}#v1.0.0`;
+    run(consumer, 'npx', ['--yes', '--allow-git=root', '--ignore-scripts', source, id, '--setup', '--source', source]);
     run(consumer, 'npm', ['exec', '--', 'project-presets', id, '--check']);
     const applied = JSON.parse(readFileSync(join(consumer, 'package.json')));
     assert.deepEqual(applied.dependencies, catalog[id].dependencies);
