@@ -46,7 +46,7 @@ def main():
     if profile in {"typescript-node", "typescript-hono", "typescript-next"}:
         filename = f"project-presets-demo-{selected}.tgz"
         source = str(artifacts / filename) if artifacts else f"{base}/{filename}"
-        flags = ["--ignore-scripts", "--allow-git=root", "--no-audit", "--no-fund"]
+        flags = ["--ignore-scripts", "--allow-git=root", "--allow-remote=root", "--no-audit", "--no-fund"]
         run("npm", "install", "--package-lock-only", "--save-dev", "--save-exact", source, *flags)
         run("npm", "ci", *flags)
         run("node", "node_modules/project-presets-demo/scripts/apply-profile.mjs", profile, "--write", "--sync")

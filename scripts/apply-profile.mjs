@@ -93,6 +93,7 @@ if (profile.language === 'python') {
     if (args.includes('--sync')) {
       const flags = ['--ignore-scripts', '--no-audit', '--no-fund'];
       if (source.startsWith('git+')) flags.push('--allow-git=root');
+      if (/^https?:/.test(source)) flags.push('--allow-remote=root');
       execFileSync('npm', ['install', '--package-lock-only', ...flags], { cwd: target, stdio: 'inherit' });
       execFileSync('npm', ['ci', ...flags], { cwd: target, stdio: 'inherit' });
     }

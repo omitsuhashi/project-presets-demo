@@ -5,6 +5,10 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import threading
+from contextlib import ExitStack
+from functools import partial
+from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 import tomllib
@@ -42,12 +46,17 @@ catalog = json.loads((ROOT / "profiles.json").read_text())
 assert manifest["version"] == python["project"]["version"]
 assert python["project"]["dependencies"] == ["ruff==" + catalog["python-scripts"]["devDependencies"]["ruff"]]
 
-with tempfile.TemporaryDirectory(prefix="project-presets-packages-") as directory:
+with tempfile.TemporaryDirectory(prefix="project-presets-packages-") as directory, ExitStack() as cleanup:
     temp = Path(directory)
     provider = temp / "provider"
     provider.mkdir()
     artifacts = temp / "artifacts"
     artifacts.mkdir()
+    server = ThreadingHTTPServer(("127.0.0.1", 0), partial(SimpleHTTPRequestHandler, directory=str(artifacts)))
+    cleanup.callback(server.server_close)
+    cleanup.callback(server.shutdown)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    remote = f"http://127.0.0.1:{server.server_port}"
     for name in ["package.json", "pyproject.toml", "README.md", "LICENSE", "profiles.json", "profiles", "typescript", "python", "scripts"]:
         source = ROOT / name
         if source.is_dir():
@@ -73,7 +82,7 @@ with tempfile.TemporaryDirectory(prefix="project-presets-packages-") as director
     init(py)
     (ts / "package.json").write_text('{"name":"consumer","private":true,"type":"module","scripts":{"custom":"keep"}}\n')
     flags = ["--ignore-scripts", "--no-audit", "--no-fund"]
-    run(ts, "npm", "install", "--save-dev", "--save-exact", str(artifacts / "project-presets-demo-1.0.0.tgz"), *flags)
+    run(ts, "npm", "install", "--save-dev", "--save-exact", "--allow-remote=root", remote + "/project-presets-demo-1.0.0.tgz", *flags)
     cli = ["node", "node_modules/project-presets-demo/scripts/apply-profile.mjs", "typescript-node"]
     run(ts, *cli, "--write", "--sync")
     run(ts, *cli, "--check")
@@ -138,7 +147,7 @@ ignore = ["F401"]
             assert 'extend-select = ["C4"]' in (py / ".project-presets/ruff/base.toml").read_text()
         git(consumer, "revert", "--no-edit", revision)
         if consumer == ts:
-            run(ts, "npm", "ci", *flags)
+            run(ts, "npm", "ci", "--allow-remote=root", *flags)
             run(ts, *cli, "--check")
             assert json.loads((ts / "package-lock.json").read_text())["packages"]["node_modules/@types/node"]["version"] == "24.19.0"
         else:
