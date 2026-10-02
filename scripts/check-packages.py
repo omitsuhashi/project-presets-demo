@@ -115,8 +115,17 @@ with tempfile.TemporaryDirectory(prefix="project-presets-packages-") as director
     flags = ["--ignore-scripts", "--no-audit", "--no-fund"]
     run(ts, "npm", "install", "--save-dev", "--save-exact", "--allow-remote=root", remote + "/project-presets-demo-1.0.0.tgz", *flags)
     cli = ["node", "node_modules/project-presets-demo/scripts/apply-profile.mjs", "typescript-node"]
-    run(ts, *cli, "--write", "--sync")
+    before = (ts / "package.json").read_bytes()
+    run(ts, *cli, "--setup", "--check", expected=1)
+    assert (ts / "package.json").read_bytes() == before
+    assert set(json.loads(before)["devDependencies"]) == {"project-presets-demo"}
+    run(ts, "npm", "exec", "--", "project-presets", "typescript-node", "--setup")
     run(ts, *cli, "--check")
+    ready = {name: (ts / name).read_bytes() for name in ["package.json", "package-lock.json", ".project-preset.json", "eslint.config.mjs", "tsconfig.json"]}
+    run(ts, *cli, "--setup")
+    assert all((ts / name).read_bytes() == content for name, content in ready.items())
+    run(ts, "npm", "exec", "--", "eslint", "--version")
+    run(ts, "npm", "exec", "--", "tsc", "--version")
     (ts / "main.ts").write_text("export const message = 'consumer';\nconsole.log(message);\n")
     with (ts / "eslint.config.mjs").open("a") as file:
         file.write("\n// Consumer owns this comment.\n")
@@ -148,8 +157,12 @@ ignore = ["F401"]
     assert (py / "pyproject.toml").read_bytes() == before
     assert not (py / ".project-preset.json").exists()
     run(py, *pycli, "--write", expected=1)
-    run(py, *pycli, "--adopt", "--write", "--sync")
+    run(py, *pycli, "--setup", "--check", expected=2)
+    run(py, *pycli, "--adopt", "--setup")
     run(py, *pycli, "--check")
+    ready = {name: (py / name).read_bytes() for name in ["pyproject.toml", "uv.lock", ".project-preset.json"]}
+    run(py, *pycli, "--setup")
+    assert all((py / name).read_bytes() == content for name, content in ready.items())
     py_config = tomllib.loads((py / "pyproject.toml").read_text())["tool"]["ruff"]
     py_source = (py / "main.py").read_bytes()
     commit(py, "Adopt old Python wheel")
@@ -207,7 +220,7 @@ keep = "application-owned"
         run(consumer, *cli)
         assert (consumer / "pyproject.toml").read_bytes() == before
         assert not (consumer / ".project-preset.json").exists()
-        run(consumer, *cli, "--write", "--sync")
+        run(consumer, "uv", "run", "--locked", "project-presets-python", profile, "--setup")
         run(consumer, *cli, "--check")
         with (consumer / "pyproject.toml").open("a") as file:
             file.write('\n[tool.ruff.lint]\nignore = ["F401"]\n')

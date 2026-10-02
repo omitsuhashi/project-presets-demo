@@ -2,7 +2,11 @@
 
 利用側の担当者が、Profile を一つ選び、固定した配布版と設定・lockfile を Git に保存するための手順です。初回導入後の更新は [利用側の更新・復旧](update.md) を使います。
 
-この手順は公開済みの `v1.2.0` を使います。TypeScript は Node.js 24 / npm 12、Python は Python 3.12 / uv 0.11.7 で検証しています。npm・PyPI のアカウント、GitHub 認証、Git submodule は初回導入には不要です。ツールの導入は [Node.js](https://nodejs.org/en/download) / [uv](https://docs.astral.sh/uv/getting-started/installation/) を参照してください。
+この手順は公開済みの `v1.3.0` を使います。TypeScript は Node.js 24 / npm 12、Python は Python 3.12 / uv 0.11.7 で検証しています。npm・PyPI のアカウント、GitHub 認証、Git submodule は初回導入には不要です。ツールの導入は [Node.js](https://nodejs.org/en/download) / [uv](https://docs.astral.sh/uv/getting-started/installation/) を参照してください。
+
+`--setup` は設定・依存・lockfile を一括適用します。繰り返し実行でき、案件固有の設定を保持します。書き込み前に確認したい場合は `--setup` を外すと preview、適用後の確認は `--check` です。従来の `--write --sync` も同じ処理として利用できます。
+
+Node.js / npm または Python / uv と、利用側の `package.json` / `pyproject.toml` が前提です。新規案件の manifest 作成例を以下に含めています。アプリのコード、DB、secret、本番環境は案件側で用意します。
 
 ## TypeScript
 
@@ -15,20 +19,17 @@ npm init -y
 npm pkg set type=module
 npm pkg delete scripts.test
 
-PRESET_VERSION=1.2.0
-npm install --package-lock-only --allow-remote=root --ignore-scripts --save-dev --save-exact \
-  "https://github.com/omitsuhashi/project-presets-demo/releases/download/v${PRESET_VERSION}/project-presets-demo-${PRESET_VERSION}.tgz" \
-  eslint@9.39.5 typescript@6.0.3
-npm ci --allow-remote=root --ignore-scripts
+PRESET_VERSION=1.3.0
+npm install --allow-remote=root --ignore-scripts --save-dev --save-exact \
+  "https://github.com/omitsuhashi/project-presets-demo/releases/download/v${PRESET_VERSION}/project-presets-demo-${PRESET_VERSION}.tgz"
 
 # 初回に一つ選ぶ。node / hono / next はそれぞれ別の構成。
 PRESET_PROFILE=typescript-node
-npm exec -- project-presets "$PRESET_PROFILE"         # 書き込みなしの確認
-npm exec -- project-presets "$PRESET_PROFILE" --write --sync
+npm exec -- project-presets "$PRESET_PROFILE" --setup
 npm exec -- project-presets "$PRESET_PROFILE" --check
 ```
 
-`PRESET_PROFILE` は `typescript-node`、`typescript-hono`、`typescript-next` から選びます。初回の `--write` が `eslint.config.mjs` / `tsconfig.json` / `.project-preset.json` を作り、必要な依存を `package.json` に追加します。`--sync` が npm lock を生成して再導入します。Hono・Next.js・React は実行用依存、preset・lint・型定義は開発用依存です。
+`PRESET_PROFILE` は `typescript-node`、`typescript-hono`、`typescript-next` から選びます。`--setup` が `eslint.config.mjs` / `tsconfig.json` / `.project-preset.json` を作り、Profile の exact version を `package.json` に登録して npm lock とインストール済み依存を揃えます。**ESLint・TypeScript・型定義やフレームワークを個別にインストールする必要はありません。** 配布パッケージ自体も ESLint・TypeScript に固定版で依存するため、初回の導入は配布パッケージ一つだけで始められます。Hono・Next.js・React は実行用依存、preset・lint・型定義は開発用依存です。
 
 アプリのコード・起動 scripts は案件側で用意します。Node.js の最小確認は次のとおりです。
 
@@ -74,17 +75,16 @@ cd python-demo
 uv init --bare --name python-demo --python 3.12
 uv python pin 3.12
 
-PRESET_VERSION=1.2.0
+PRESET_VERSION=1.3.0
 uv add --dev "project-presets-demo @ https://github.com/omitsuhashi/project-presets-demo/releases/download/v${PRESET_VERSION}/project_presets_demo-${PRESET_VERSION}-py3-none-any.whl"
 
 # 初回に一つ選ぶ。scripts / django / fastapi はそれぞれ別の構成。
 PRESET_PROFILE=python-scripts
-uv run --locked project-presets-python "$PRESET_PROFILE"   # 書き込みなしの確認
-uv run --locked project-presets-python "$PRESET_PROFILE" --write --sync
+uv run --locked project-presets-python "$PRESET_PROFILE" --setup
 uv run --locked project-presets-python "$PRESET_PROFILE" --check
 ```
 
-`PRESET_PROFILE` は `python-scripts`、`python-django`、`python-fastapi` から選びます。wheel が Ruff の版と設定を同梱し、CLI が設定を `.project-presets/ruff/` にコピーして `[tool.ruff].extend` を追加します。
+`PRESET_PROFILE` は `python-scripts`、`python-django`、`python-fastapi` から選びます。**Ruff・Django・FastAPI・Uvicorn の個別インストールは不要です。** wheel が Ruff の固定版に依存し、`--setup` が選んだフレームワークを登録・導入して uv lock と実行環境を揃えます。設定を `.project-presets/ruff/` にコピーし、`[tool.ruff].extend` も追加します。
 
 | Profile | 実行用依存 | Ruff 設定 |
 | --- | --- | --- |
@@ -148,16 +148,16 @@ git commit -m "Adopt Python project preset"
 
 ## 既存案件
 
-導入用 branch で、既存の manifest とアプリテストを使います。上記の配布物の install コマンドだけを実行し、既存設定の参照を共通設定に統合します。新規用の `npm init` / `uv init` / `scripts.test` の削除は行いません。管理対象の依存は [profiles.json](../profiles.json) の exact pin に合わせます。Python の既存依存を揃える時も `uv add` で manifest / lock を更新します。
+導入用 branch で、既存の manifest とアプリテストを使います。上記の配布物の install コマンドだけを実行し、既存設定の参照を共通設定に統合します。新規用の `npm init` / `uv init` / `scripts.test` の削除は行いません。管理対象の依存が未導入なら CLI が追加します。既存の版が競合する場合は、[profiles.json](../profiles.json) の exact pin に合わせてから登録します。Python の既存依存を揃える時も `uv add` で manifest / lock を更新します。
 
-既存設定を保持したまま登録するには、選んだ Profile で `--adopt --write --sync` を使います。その後に `--check`、lint、型チェック、アプリのテストを実行して導入 PR をレビューします。`--adopt` は依存の競合や Profile 切替を強制するオプションではありません。
+既存設定を保持したまま登録するには、選んだ Profile で `--adopt --setup` を使います。その後に `--check`、lint、型チェック、アプリのテストを実行して導入 PR をレビューします。`--adopt` は依存の競合や Profile 切替を強制するオプションではありません。
 
 ```sh
 # TypeScript / Hono の既存案件の例
-npm exec -- project-presets typescript-hono --adopt --write --sync
+npm exec -- project-presets typescript-hono --adopt --setup
 npm exec -- project-presets typescript-hono --check
 # Python / Django の既存案件の例
-uv run --locked project-presets-python python-django --adopt --write --sync
+uv run --locked project-presets-python python-django --adopt --setup
 uv run --locked project-presets-python python-django --check
 ```
 

@@ -1,11 +1,16 @@
 {
   "name": "project-presets-demo",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "description": "Versioned framework, dependency, TypeScript and lint profiles",
   "type": "module",
   "license": "MIT",
-  "repository": { "type": "git", "url": "git+https://github.com/omitsuhashi/project-presets-demo.git" },
-  "engines": { "node": "^20.19.0 || ^22.13.0 || >=24" },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/omitsuhashi/project-presets-demo.git"
+  },
+  "engines": {
+    "node": "^20.19.0 || ^22.13.0 || >=24"
+  },
   "exports": {
     ".": "./typescript/base.js",
     "./node": "./typescript/node.js",
@@ -14,9 +19,22 @@
     "./tsconfig/node.json": "./typescript/tsconfig-node.json",
     "./tsconfig/next.json": "./typescript/tsconfig-next.json"
   },
-  "bin": { "project-presets": "./scripts/apply-profile.mjs" },
-  "files": ["typescript", "python", "profiles.json", "profiles", "scripts/apply-profile.mjs"],
-  "keywords": ["eslint", "eslintconfig", "typescript", "ruff"],
+  "bin": {
+    "project-presets": "./scripts/apply-profile.mjs"
+  },
+  "files": [
+    "typescript",
+    "python",
+    "profiles.json",
+    "profiles",
+    "scripts/apply-profile.mjs"
+  ],
+  "keywords": [
+    "eslint",
+    "eslintconfig",
+    "typescript",
+    "ruff"
+  ],
   "scripts": {
     "lint": "eslint typescript scripts eslint.config.mjs examples/typescript",
     "test": "node scripts/check-demo.mjs && npm run test:packages",
@@ -26,18 +44,20 @@
   },
   "dependencies": {
     "@eslint/js": "9.39.5",
+    "eslint": "9.39.5",
     "globals": "17.13.0",
+    "typescript": "6.0.3",
     "typescript-eslint": "8.71.0"
   },
   "peerDependencies": {
-    "eslint": "^9.39.5",
-    "typescript": ">=5.0.0 <6.1.0",
     "eslint-config-next": "^16.3.8"
   },
-  "peerDependenciesMeta": { "eslint-config-next": { "optional": true } },
+  "peerDependenciesMeta": {
+    "eslint-config-next": {
+      "optional": true
+    }
+  },
   "devDependencies": {
-    "eslint": "9.39.5",
-    "typescript": "6.0.3",
     "eslint-config-next": "16.3.8",
     "next": "16.3.8",
     "react": "19.3.0",

@@ -1,6 +1,6 @@
 # 利用側の更新・適用・復旧
 
-導入済みの利用側担当者が、新しい配布版を一つの更新 PR にまとめ、検証・レビュー後に適用する手順です。初回は [導入手順](install.md)、公開作業は [配布側の更新](publish.md) を使います。
+導入済みの利用側担当者が、新しい配布版を一つの更新 PR にまとめ、検証・レビュー後に適用する手順です。初回は [導入手順](install.md) の「配布パッケージを導入 → CLI の `--setup`」、公開作業は [配布側の更新](publish.md) を使います。
 
 **配布側が Release を公開しても、利用側のファイルや実行環境は自動では変わりません。** 手動または workflow が更新 PR を作り、利用側がマージした後、各環境で lock に沿って依存を再導入します。自動更新の対象は `.project-preset.json` がある案件です。
 
@@ -17,7 +17,7 @@ marker に現在の Profile / 配布版が記録されています。未 commit 
 
 | 選び方 | 動作 |
 | --- | --- |
-| `--version 1.2.0` など明示 | 指定した公開版を選ぶ。major 更新・ダウングレードも明示指定 |
+| `--version 1.3.0` など明示 | 指定した公開版を選ぶ。major 更新・ダウングレードも明示指定 |
 | `--version` を省略 | 現在と同じ major で、現在以上の最新 stable Release を選ぶ |
 | Profile の変更 | アプリの移行が必要。通常の更新 CLI は停止する |
 
@@ -30,13 +30,13 @@ marker に現在の Profile / 配布版が記録されています。未 commit 
 script を利用側の外に用意します。以下は利用側のルートで実行する例です。`../preset-provider` が未使用のディレクトリであることを確認してください。
 
 ```sh
-git clone --depth 1 --branch v1.2.0 \
+git clone --depth 1 --branch v1.3.0 \
   https://github.com/omitsuhashi/project-presets-demo.git ../preset-provider
 
 git switch -c codex/update-project-preset
-# 1.2.0 は公開済み版での例。採用する新版に置き換える。
+# 1.3.0 は公開済み版での例。採用する新版に置き換える。
 uv run --no-project --python 3.12 python ../preset-provider/scripts/update-consumer.py \
-  --directory . --version 1.2.0
+  --directory . --version 1.3.0
 ```
 
 script は版を導入してからその版の CLI で管理対象を更新するため、**更新 script に全体の preview モードはありません**。最初の導入 CLI の書き込みなし表示は、インストール済み版についての確認です。更新は branch 上で行い、diff とテストを確認します。
@@ -51,7 +51,7 @@ uv run --no-project --python 3.12 python ../preset-provider/scripts/update-consu
 
 ```sh
 # PRESET_TOOL_VERSION を採用する公開済みのツール版に置き換える。
-PRESET_TOOL_VERSION=1.2.0
+PRESET_TOOL_VERSION=1.3.0
 git -C ../preset-provider fetch --depth 1 origin tag "v${PRESET_TOOL_VERSION}"
 git -C ../preset-provider switch --detach "v${PRESET_TOOL_VERSION}"
 ```
@@ -121,7 +121,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   update:
-    uses: omitsuhashi/project-presets-demo/.github/workflows/update-consumer.yml@v1.2.0
+    uses: omitsuhashi/project-presets-demo/.github/workflows/update-consumer.yml@v1.3.0
     with:
       version: ${{ inputs.version || '' }}
       test-command: uv run --locked python -m unittest discover

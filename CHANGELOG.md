@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.3.0
+
+- TypeScript / Python CLI に `--setup` を追加。設定の適用・Profile の依存登録・native lock の更新・依存のインストールを一回で実行。
+- npm パッケージが ESLint / TypeScript の固定版に直接依存。初回は配布パッケージ一つだけを導入し、CLI で Node.js / Hono / Next.js の構成を揃えられる。
+- Python も wheel 一つと CLI から Ruff・Django または FastAPI / Uvicorn を導入。実行用 / 開発用依存の分離は維持。
+- 配布パッケージだけからの導入、CLI の一括 setup、再実行、既存設定保持、旧版からの更新 / revert を検証。導入・更新・公開の手順も更新。
+
+既存のオプションなし preview、`--write --sync`、`--check` は引き続き利用可能。Profile の依存版・lint ルールは 1.2.0 と同じ。既存案件は通常の更新手順で 1.3.0 に更新できる。既存の lint 設定は参照統合後に `--adopt --setup` で登録する。
+
 ## 1.2.0
 
 - `python-django` と `python-fastapi` を追加。Django 6.1.1 / FastAPI 0.142.2 / Uvicorn 0.54.0 と対応する Ruff の `DJ` / `FAST` ルールを固定。

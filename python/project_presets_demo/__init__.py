@@ -16,11 +16,14 @@ def main():
     parser.add_argument("profile", choices=["python-scripts", "python-django", "python-fastapi"])
     parser.add_argument("directory", nargs="?", default=".")
     mode = parser.add_mutually_exclusive_group()
+    mode.add_argument("--setup", action="store_true", help="Apply settings and install all profile dependencies")
     mode.add_argument("--write", action="store_true")
     mode.add_argument("--check", action="store_true")
     parser.add_argument("--adopt", action="store_true")
     parser.add_argument("--sync", action="store_true")
     args = parser.parse_args()
+    args.write = args.write or args.setup
+    args.sync = args.sync or args.setup
     try:
         apply(args)
     except (ValueError, OSError, metadata.PackageNotFoundError, subprocess.CalledProcessError) as error:
@@ -29,7 +32,7 @@ def main():
 
 def apply(args):
     if args.sync and not args.write:
-        raise ValueError("--sync requires --write")
+        raise ValueError("--sync requires --write or --setup")
     target = Path(args.directory).resolve()
     manifest_path = target / "pyproject.toml"
     text = manifest_path.read_text()

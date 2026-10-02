@@ -9,17 +9,19 @@ const root = fileURLToPath(new URL('../', import.meta.url));
 const catalog = JSON.parse(readFileSync(join(root, 'profiles.json'), 'utf8'));
 const release = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).version;
 const args = process.argv.slice(2);
-assert(args.every((arg) => !arg.startsWith('--') || ['--write', '--check', '--adopt', '--sync'].includes(arg)), 'Unknown option');
-assert(!(args.includes('--write') && args.includes('--check')), 'Choose --write or --check');
-assert(!args.includes('--sync') || args.includes('--write'), '--sync requires --write');
+assert(args.every((arg) => !arg.startsWith('--') || ['--setup', '--write', '--check', '--adopt', '--sync'].includes(arg)), 'Unknown option');
+assert(args.filter((arg) => ['--setup', '--write', '--check'].includes(arg)).length <= 1, 'Choose --setup, --write or --check');
+const write = args.includes('--setup') || args.includes('--write');
+const sync = args.includes('--setup') || args.includes('--sync');
+assert(!sync || write, '--sync requires --write or --setup');
 const positional = args.filter((arg) => !arg.startsWith('--'));
-assert(positional.length >= 1 && positional.length <= 2, 'Usage: project-presets PROFILE [DIRECTORY] [--write | --check] [--adopt] [--sync]');
+assert(positional.length >= 1 && positional.length <= 2, 'Usage: project-presets PROFILE [DIRECTORY] [--setup | --write | --check] [--adopt] [--sync]');
 const [id, directory = '.'] = positional;
 assert(Object.hasOwn(catalog, id), `Unknown profile: ${id}. Choose ${Object.keys(catalog).join(', ')}`);
 const profile = catalog[id];
 if (profile.language === 'python') {
   console.log(JSON.stringify(profile, null, 2));
-  assert(!args.includes('--write') && !args.includes('--check'), 'Python uses the wheel and project-presets-python; see README');
+  assert(!write && !args.includes('--check'), 'Python uses the wheel and project-presets-python; see README');
 } else {
   const target = resolve(directory);
   const path = (name) => join(target, name);
@@ -76,7 +78,7 @@ if (profile.language === 'python') {
     assert(lock.packages['node_modules/project-presets-demo']?.version === release, 'The npm lock has a different preset release');
     assert(lock.packages[''].devDependencies?.['project-presets-demo'] === source, 'The npm lock and manifest use different preset sources');
   }
-  if (args.includes('--write')) {
+  if (write) {
     // Validate and stage every file before replacing any destination.
     const staged = [];
     try {
@@ -90,7 +92,7 @@ if (profile.language === 'python') {
       // Staged files are retained for recovery if the filesystem rejects a write.
       throw new Error(`Preset write failed; inspect .preset-${process.pid} files before retrying`, { cause: error });
     }
-    if (args.includes('--sync')) {
+    if (sync) {
       const flags = ['--ignore-scripts', '--no-audit', '--no-fund'];
       if (source.startsWith('git+')) flags.push('--allow-git=root');
       if (/^https?:/.test(source)) flags.push('--allow-remote=root');
