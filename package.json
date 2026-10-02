@@ -43,7 +43,7 @@
     "test:packages": "uv run --no-project --python 3.12 python scripts/check-packages.py"
   },
   "dependencies": {
-    "@eslint/js": "9.39.5",
+    "@eslint/js": "10.0.1",
     "eslint": "9.39.5",
     "globals": "17.13.0",
     "typescript": "6.0.3",
