@@ -25,10 +25,10 @@ Node.js 24 と npm を使います。空の npm プロジェクトで次を実�
 npm init -y
 npm pkg set type=module
 npm pkg delete scripts.test
-npm install --package-lock-only --ignore-scripts --save-dev --save-exact \
-  https://github.com/omitsuhashi/project-presets-demo/releases/download/v1.1.0/project-presets-demo-1.1.0.tgz \
+npm install --package-lock-only --allow-remote=root --ignore-scripts --save-dev --save-exact \
+  https://github.com/omitsuhashi/project-presets-demo/releases/download/v1.1.1/project-presets-demo-1.1.1.tgz \
   eslint@9.39.5 typescript@6.0.3
-npm ci --ignore-scripts
+npm ci --allow-remote=root --ignore-scripts
 
 # Profile を選んで差分を見る。書き込みは --write の時だけ。
 npm exec -- project-presets typescript-hono
@@ -53,7 +53,7 @@ Python 3.12 と uv を使います。Node.js と Git submodule は不要です�
 
 ```sh
 uv init --bare --python 3.12
-uv add --dev 'project-presets-demo @ https://github.com/omitsuhashi/project-presets-demo/releases/download/v1.1.0/project_presets_demo-1.1.0-py3-none-any.whl'
+uv add --dev 'project-presets-demo @ https://github.com/omitsuhashi/project-presets-demo/releases/download/v1.1.1/project_presets_demo-1.1.1-py3-none-any.whl'
 uv run --locked project-presets-python python-scripts
 uv run --locked project-presets-python python-scripts --write --sync
 uv run --locked project-presets-python python-scripts --check
@@ -90,7 +90,7 @@ uv run --no-project --python 3.12 python /path/to/preset-provider/scripts/update
 - TypeScript: パッケージ、管理依存、npm lock の整合性、lint、型チェックと、設定済みの `build` / `test` scripts を検証します。
 - Python: パッケージ、同梱設定、Ruff、uv lock の整合性と lint を検証します。案件のテストも追加してください。
 
-更新の途中で install・検証が失敗したら、PR をマージせず残った差分を確認します。ファイル置換とパッケージ管理をまたぐ処理はトランザクションではありません。元の manifest・lock・marker・管理設定を戻し、TypeScript は `npm ci --ignore-scripts`、Python は `uv sync --locked` で復旧します。マージ後は更新 PR を revert して同じ操作をします。
+更新の途中で install・検証が失敗したら、PR をマージせず残った差分を確認します。ファイル置換とパッケージ管理をまたぐ処理はトランザクションではありません。元の manifest・lock・marker・管理設定を戻し、TypeScript は `npm ci --allow-remote=root --ignore-scripts`、Python は `uv sync --locked` で復旧します。マージ後は更新 PR を revert して同じ操作をします。
 
 ## 更新 PR を自動で受け取る
 
@@ -114,7 +114,7 @@ monorepo では `directory` を指定できます。同じ Profile が複数デ�
 ## この repository の検証
 
 ```sh
-npm ci --ignore-scripts
+npm ci --allow-remote=root --ignore-scripts
 npm run lint
 npm run demo:ts
 npm run demo:py

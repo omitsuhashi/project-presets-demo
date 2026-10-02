@@ -16,3 +16,8 @@
 - 実際の tarball / wheel の更新、手動変更の拒否、設定保持、lock と設定の revert を CI で検証。
 
 既存 Git 配布の TypeScript import と Python 設定パスは保持。Python の wheel 方式へは、旧 submodule の取り外しと設定参照の変更をレビューして移行する。フレームワーク切替と業務コード移行は引き続き手動。
+
+## 1.1.1
+
+- npm 12 の URL 配布制限に対応し、導入・更新・復旧で direct remote package を明示的に許可。
+- HTTP の tarball を使う回帰テストを追加。公開済み 1.1.0 の配布物は差し替えず、修正は新しい版に収録。
