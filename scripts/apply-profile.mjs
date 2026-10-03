@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
-import { basename, resolve, join } from 'node:path';
+import { basename, dirname, resolve, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 
@@ -85,13 +85,19 @@ if (profile.language === 'python') {
     ? `${source.split('#')[0]}#v${release}`
     : /^(https?:|file:)/.test(source) ? source : release;
   const state = { profile: id, release, packageManager, dependencies: profile.dependencies, devDependencies: profile.devDependencies };
+  // ponytail: one standalone project root; shared repository workflows need explicit directory inputs.
+  const workflow = '.github/workflows/update-presets.yml';
+  const updateWorkflow = readFileSync(join(root, 'python/project_presets_demo/update-presets.yml'), 'utf8')
+    .replace(/(update-consumer\.yml@v)\d+\.\d+\.\d+/, (_, prefix) => prefix + release);
   const writes = {
     'package.json': JSON.stringify(manifest, null, 2) + '\n',
     [marker]: JSON.stringify(state, null, 2) + '\n',
     ...Object.fromEntries(Object.entries(files).filter(([name]) => !existsSync(path(name)))),
+    ...(!existsSync(path(workflow)) ? { [workflow]: updateWorkflow } : {}),
   };
   console.log(JSON.stringify({ profile: id, release, packageManager, source: manifest.devDependencies['project-presets-demo'], changes, create: Object.keys(writes).filter((name) => !existsSync(path(name))) }, null, 2));
   if (options.check) {
+    assert(existsSync(path(workflow)), 'Run --setup to add the automatic update workflow');
     assert(previousManager === packageManager && previous?.packageManager === packageManager, 'Apply the pinned pnpm version before merging');
     assert(manifest.devDependencies['project-presets-demo'] === previousSource, 'Pin the manifest to the executing preset release');
     assert(previous?.release === release && changes.length === 0 && Object.keys(files).every((name) => existsSync(path(name))), 'Apply this preset release and regenerate the pnpm lock before merging');
@@ -111,6 +117,7 @@ if (profile.language === 'python') {
     const staged = [];
     try {
       for (const [name, content] of Object.entries(writes)) {
+        mkdirSync(dirname(path(name)), { recursive: true });
         const temporary = `${path(name)}.preset-${process.pid}`;
         writeFileSync(temporary, content, { flag: 'wx' });
         staged.push([temporary, path(name)]);
@@ -128,5 +135,6 @@ if (profile.language === 'python') {
       assert(JSON.parse(readFileSync(path('node_modules/project-presets-demo/package.json'), 'utf8')).version === release, 'The source must contain the executing preset release');
       for (const name of legacyLocks) unlinkSync(path(name));
     }
+    console.log(`Automatic update PRs: commit ${workflow} with the preset files and push to the GitHub default branch. Enable Actions > General > Allow GitHub Actions to create and approve pull requests. Existing workflows are preserved; review their schedule and tests.`);
   }
 }

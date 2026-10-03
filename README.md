@@ -4,23 +4,23 @@
 
 ## 最初の導入
 
-空のディレクトリから、`npx` / `uvx` の CLI 一回で manifest・設定・必要な依存・lockfile が揃います。`package.json` / `pyproject.toml` がなければ自動作成します。配布パッケージの事前インストールも、Linter やフレームワークの個別インストールも不要です。
+空のディレクトリから、`npx` / `uvx` の CLI 一回で manifest・設定・必要な依存・lockfile・更新 PR 用 workflow が揃います。`package.json` / `pyproject.toml` がなければ自動作成します。配布パッケージの事前インストールも、Linter やフレームワークの個別インストールも不要です。
 
 ```sh
 # TypeScript: node / hono / next のいずれかを選ぶ
 npx --yes --allow-remote=root --ignore-scripts \
-  https://github.com/omitsuhashi/project-presets-demo/releases/download/v2.0.0/project-presets-demo-2.0.0.tgz \
+  https://github.com/omitsuhashi/project-presets-demo/releases/download/v2.1.0/project-presets-demo-2.1.0.tgz \
   typescript-node --setup
 
 # Python: scripts / django / fastapi のいずれかを選ぶ
 uvx --python 3.12 \
-  --from https://github.com/omitsuhashi/project-presets-demo/releases/download/v2.0.0/project_presets_demo-2.0.0-py3-none-any.whl \
+  --from https://github.com/omitsuhashi/project-presets-demo/releases/download/v2.1.0/project_presets_demo-2.1.0-py3-none-any.whl \
   project-presets-python python-django --setup
 ```
 
 既存の lint 設定がある場合は、[導入手順の既存案件](docs/install.md#既存案件) に従って参照を統合し `--adopt --setup` を使います。Node.js / npm・Python / uv の導入も導入手順に記載しています。オプションなしは書き込みなしの preview、`--check` は整合性の確認です。未作成のディレクトリも `PROFILE DIRECTORY --setup` で初期化できます。TypeScript 内部の依存導入・更新は配布パッケージに含む **pnpm 11.28.0** を使い、`packageManager` と `pnpm-lock.yaml` を保存します。pnpm の事前インストールは不要です。CLI が採用版の共通パッケージも開発用依存に登録するため、CI では pnpm / uv lock から同じ設定を再現できます。
 
-1.x の TypeScript 案件は `--version 2.0.0` を明示して [pnpm へ移行](docs/update.md#npm-の-1x-から-pnpm-へ移行する) します。lockfile・CI コマンドが変わるため major を上げています。Python は uv を継続します。
+1.x の TypeScript 案件は `--version 2.1.0` を明示して [pnpm へ移行](docs/update.md#npm-の-1x-から-pnpm-へ移行する) します。lockfile・CI コマンドが変わるため major を上げています。Python は uv を継続します。
 
 ## 使い方・更新手順
 
@@ -30,7 +30,7 @@ uvx --python 3.12 \
 | 配布側: 共通設定・依存を更新する | [配布物の更新・公開](docs/publish.md) | 検証済み commit にタグを付け、Release の配布物を公開 |
 | 利用側: 新版を適用する | [更新 PR・適用・復旧](docs/update.md) | 更新をレビューしてマージし、lock から実行環境を再構築 |
 
-配布側の更新 PR → 固定タグ / GitHub Release → 利用側の更新 PR → マージ / 依存の再導入、という流れです。Release の公開だけでは利用側は変わりません。手動または [更新 workflow](examples/update-presets.yml) で更新 PR を作ります。
+配布側の更新 PR → 固定タグ / GitHub Release → 利用側の更新 PR → マージ / 依存の再導入、という流れです。`--setup` が `.github/workflows/update-presets.yml` を配置します。GitHub の既定 branch へ commit / push し、Settings → Actions → General の「Allow GitHub Actions to create and approve pull requests」を有効にすると、毎週月曜 11:15（日本時間）に同じ major の新しい配布版を検証し、差分があれば更新 PR を作ります。Release 公開後の適用は、この PR をレビューしてマージします。詳細は [更新手順](docs/update.md#3-更新-pr-を自動で受け取る) を参照してください。
 
 ## 選べる構成
 
@@ -49,7 +49,7 @@ ESLint 9 は [2026-08-06 に EOL](https://eslint.org/version-support/) です。
 
 ## 配布するものと管理する範囲
 
-[公開版 v2.0.0](https://github.com/omitsuhashi/project-presets-demo/releases/tag/v2.0.0) は npm tarball・Python wheel / sdist・`SHA256SUMS` を含みます。初回導入と明示した版の適用は、公開 URL から GitHub 認証なしで行えます。
+[公開版 v2.1.0](https://github.com/omitsuhashi/project-presets-demo/releases/tag/v2.1.0) は npm tarball・Python wheel / sdist・`SHA256SUMS` を含みます。初回導入と明示した版の適用は、公開 URL から GitHub 認証なしで行えます。
 
 - TypeScript: Profile の実行用 / 開発用依存と marker を管理。利用側は共通 package の設定を import / extends し、案件固有の上書きを保守。
 - Python: framework は実行用依存、preset / Ruff は開発用依存。コピーした共通設定と marker を管理し、案件固有の上書きは `pyproject.toml` で保守。

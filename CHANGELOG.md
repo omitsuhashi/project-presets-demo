@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.1.0
+
+- TypeScript / Python の bootstrap に `.github/workflows/update-presets.yml` の配置を追加。npm tarball と Python wheel に同じ workflow を含め、`npx` / `uvx` の `--setup` 一回で更新 PR の下地も作る。
+- 毎週月曜 02:15 UTC（日本時間 11:15）と Actions 手動実行で、同じ major の配布版を検証して更新 PR を作成。setup 完了時に GitHub 既定 branch への commit / push と Actions の PR 作成許可を案内する。
+- 既存 workflow の schedule・追加テスト・参照タグを保持し、preview は作成予定を表示、`--check` は配置の有無も確認する。欠落した workflow は setup 再実行で補える。
+- 2.0.0 以前の案件も同じ Profile に新版を適用すると workflow を追加。GitHub 側の権限設定・push、PR のレビューとマージは利用側で行う。通常の配布更新では workflow 自体を変更しない。
+
+Profile の依存版・lint ルール・pnpm / uv は 2.0.0 と同じ。独立した project を一つの repository とする bootstrap が対象。monorepo は workflow を repository ルートへ置き、対象 directory を設定する。
+
 ## 2.0.0
 
 - TypeScript の導入・更新・整合チェックを pnpm 11.28.0 に統一。pnpm を配布パッケージの依存に含め、事前導入なしの `npx ... --setup` から固定版を使用。利用側の `packageManager` / `pnpm-lock.yaml` を管理する。

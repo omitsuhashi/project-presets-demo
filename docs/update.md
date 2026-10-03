@@ -19,7 +19,7 @@ marker に現在の Profile / 配布版が記録されています。未 commit 
 
 | 選び方 | 動作 |
 | --- | --- |
-| `--version 2.0.0` など明示 | 指定した公開版を選ぶ。major 更新は明示指定。TypeScript 1.x の適用には v1.5.0 の更新 script を使う |
+| `--version 2.1.0` など明示 | 指定した公開版を選ぶ。major 更新は明示指定。TypeScript 1.x の適用には v1.5.0 の更新 script を使う |
 | `--version` を省略 | 現在と同じ major で、現在以上の最新 stable Release を選ぶ |
 | Profile の変更 | アプリの移行が必要。通常の更新 CLI は停止する |
 
@@ -36,7 +36,7 @@ marker に現在の Profile / 配布版が記録されています。未 commit 
 pnpm() { npx --yes --ignore-scripts --package=pnpm@11.28.0 -- pnpm "$@"; }
 
 git switch -c codex/update-project-preset
-PRESET_VERSION=2.0.0
+PRESET_VERSION=2.1.0
 # TypeScript の案件で実行
 npx --yes --allow-remote=root --ignore-scripts \
   "https://github.com/omitsuhashi/project-presets-demo/releases/download/v${PRESET_VERSION}/project-presets-demo-${PRESET_VERSION}.tgz" \
@@ -67,13 +67,13 @@ uv run --locked ruff check .
 script を利用側の外に用意します。以下は利用側のルートで実行する例です。`../preset-provider` が未使用のディレクトリであることを確認してください。
 
 ```sh
-git clone --depth 1 --branch v2.0.0 \
+git clone --depth 1 --branch v2.1.0 \
   https://github.com/omitsuhashi/project-presets-demo.git ../preset-provider
 
 git switch -c codex/update-project-preset
-# 2.0.0 は公開済み版での例。採用する新版に置き換える。
+# 2.1.0 は公開済み版での例。採用する新版に置き換える。
 uv run --no-project --python 3.12 python ../preset-provider/scripts/update-consumer.py \
-  --directory . --version 2.0.0
+  --directory . --version 2.1.0
 ```
 
 script は版を導入してからその版の CLI で管理対象を更新するため、**更新 script に全体の preview モードはありません**。最初の導入 CLI の書き込みなし表示は、インストール済み版についての確認です。更新は branch 上で行い、diff とテストを確認します。
@@ -88,7 +88,7 @@ uv run --no-project --python 3.12 python ../preset-provider/scripts/update-consu
 
 ```sh
 # PRESET_TOOL_VERSION を採用する公開済みのツール版に置き換える。
-PRESET_TOOL_VERSION=2.0.0
+PRESET_TOOL_VERSION=2.1.0
 git -C ../preset-provider fetch --depth 1 origin tag "v${PRESET_TOOL_VERSION}"
 git -C ../preset-provider switch --detach "v${PRESET_TOOL_VERSION}"
 ```
@@ -122,14 +122,14 @@ git diff
 TypeScript は次を commit します。
 
 ```sh
-git add package.json pnpm-lock.yaml .project-preset.json
+git add package.json pnpm-lock.yaml .project-preset.json .github/workflows/update-presets.yml
 git commit -m "Update TypeScript project preset"
 ```
 
 Python は次を commit します。
 
 ```sh
-git add pyproject.toml uv.lock .project-preset.json .project-presets/ruff
+git add pyproject.toml uv.lock .project-preset.json .project-presets/ruff .github/workflows/update-presets.yml
 git commit -m "Update Python project preset"
 ```
 
@@ -137,17 +137,17 @@ git commit -m "Update Python project preset"
 
 ### npm の 1.x から pnpm へ移行する
 
-1.x の案件は同じ major を追うため、自動では 2.x に上がりません。上記の 2.0.0 の一時 CLI を使うか、2.0.0 の更新 script / workflow に `--version 2.0.0`（workflow input は `version: 2.0.0`）を指定します。`--setup` は `packageManager` を固定し、既存 `package-lock.json` / `npm-shrinkwrap.json` を pnpm の `import` で取り込み、最新 manifest で lock を生成します。frozen install と配布版確認が成功した後に npm lock を削除します。途中で失敗した場合は元の npm lock を保持します。
+1.x の案件は同じ major を追うため、自動では 2.x に上がりません。上記の 2.1.0 の一時 CLI を使うか、2.1.0 の更新 script / workflow に `--version 2.1.0`（workflow input は `version: 2.1.0`）を指定します。`--setup` は `packageManager` を固定し、既存 `package-lock.json` / `npm-shrinkwrap.json` を pnpm の `import` で取り込み、最新 manifest で lock を生成します。frozen install と配布版確認が成功した後に npm lock を削除します。途中で失敗した場合は元の npm lock を保持します。
 
 移行 PR には `pnpm-lock.yaml` の追加、npm lock の削除、manifest / marker、CI の install / build / test コマンド変更を含めます。削除も commit するため、前述の `git add` に加え、存在していた npm lock を `git add -u -- package-lock.json`（shrinkwrap があれば同様）で stage します。CI は固定 pnpm で `install --frozen-lockfile --ignore-scripts` を使います。pnpm の厳格な依存配置で、未宣言の依存に頼ったアプリはエラーになる場合があるため、必要な依存をアプリ側で明示して lint / 型チェック / build / test を通します。
 
 移行前へ戻す場合は移行 commit を revert し、復元した npm lock で `npm ci --allow-remote=root --ignore-scripts` を実行します。未 commit の失敗なら Git から元の manifest / npm lock / marker を戻し、今回新規作成された未追跡の `pnpm-lock.yaml` だけを取り除いてから npm ci を行います。2.x の script は TypeScript 1.x の適用を変更前に停止します。1.x を継続する案件は v1.5.0 の script / workflow を使用してください。
 
-Python は従来の uv 導入・更新のままです。共通の配布版番号は 2.0.0 に揃えています。
+Python は従来の uv 導入・更新のままです。共通の配布版番号は 2.1.0 に揃えています。
 
 ## 3. 更新 PR を自動で受け取る
 
-[workflow サンプル](../examples/update-presets.yml) を利用側の `.github/workflows/update-presets.yml` に置き、既定 branch への PR をマージします。次は FastAPI の例です。
+`--setup` が `.github/workflows/update-presets.yml` を自動作成します。2.0.0 以前の導入済み案件でも、2.1.0 の CLI で同じ Profile の `--setup` を実行すると、依存の更新と一緒に追加します。手動コピーは不要です。生成された workflow を導入・更新 PR に含め、利用側の既定 branch にマージします。既存の同名ファイルは上書きしません。必要な追加テストを編集するため、次に FastAPI の例を示します。
 
 ```yaml
 name: Update preset packages
@@ -168,13 +168,13 @@ concurrency:
   cancel-in-progress: false
 jobs:
   update:
-    uses: omitsuhashi/project-presets-demo/.github/workflows/update-consumer.yml@v2.0.0
+    uses: omitsuhashi/project-presets-demo/.github/workflows/update-consumer.yml@v2.1.0
     with:
       version: ${{ inputs.version || '' }}
       test-command: uv run --locked python -m unittest discover
 ```
 
-TypeScript は `package.json` に `build` / `test` を設定し、追加検証が必要なら `test-command` に指定します。Django は標準の `manage.py check` / `test` を共通 script が実行します。必要な追加テストを同じ input に指定できます。`directory: apps/api` などで独立した project の位置を指定できます。TypeScript CLI はそのディレクトリの lock を管理し、親 workspace を更新しません。共有 pnpm workspace lock や `workspace:` 依存がある案件は、その workspace の移行・更新を別途扱います。
+TypeScript は `package.json` に `build` / `test` を設定し、追加検証が必要なら `test-command` に指定します。Django は標準の `manage.py check` / `test` を共通 script が実行します。必要な追加テストを同じ input に指定できます。`directory: apps/api` などで独立した project の位置を指定できます。TypeScript CLI はそのディレクトリの lock を管理し、親 workspace を更新しません。共有 pnpm workspace lock や `workspace:` 依存がある案件は、その workspace の移行・更新を別途扱います。子 project に生成した workflow は repository ルートの `.github/workflows/` に移して `directory` を設定します。
 
 利用側 repository の Settings → Actions → General で「Allow GitHub Actions to create and approve pull requests」を有効にします。Organization の設定で制限されている場合は管理者が設定します。専用 PAT は不要で、workflow の `GITHUB_TOKEN` を使います。
 
@@ -182,7 +182,7 @@ TypeScript は `package.json` に `build` / `test` を設定し、追加検証�
 
 `GITHUB_TOKEN` で作成した PR の `pull_request` workflow は承認待ちになるため、**必要な案件テストを `test-command` に指定して PR 作成前に実行し、PR でも必要な workflow を承認して確認してください。** [GitHub の trigger rules](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/trigger-a-workflow)。
 
-サンプルをコピーするまでは利用側の自動更新は有効になりません。更新用 workflow の参照タグも固定されているため、新しい CLI 対応が必要な時はタグを更新します。同じ Profile が複数ディレクトリにある場合、現在の branch 名は Profile / 版で共通なので、手動 script でまとめて更新します。
+生成した workflow を既定 branch に commit / push し、Actions の PR 作成を許可するまでは自動更新は稼働しません。通常の依存・lint の新版は同じ major から自動で取得するため、配布版ごとの workflow 編集は不要です。更新用 workflow 自体の参照タグは固定して保持します。新しい更新 script 対応が必要な時だけ参照タグを別の PR で更新します。同じ Profile が複数ディレクトリにある場合、現在の branch 名は Profile / 版で共通なので、手動 script でまとめて更新します。
 
 ## 4. マージ後に実行環境へ反映する
 
@@ -207,7 +207,7 @@ preset の更新だけでサーバーを再起動・再デプロイはしませ�
 
 更新全体はトランザクションではありません。途中の install / lint / test で失敗した場合も差分が残ることがあります。PR をマージせず、エラーと diff を確認します。設定の競合は案件側の上書きへ移すなど、原因を解消して再実行します。
 
-更新 branch では、更新前の commit から manifest・lock・marker・管理設定を戻し、上記の `pnpm install --frozen-lockfile --ignore-scripts` / `uv sync --locked` で環境を復旧します。まだ更新を commit しておらず、更新前の作業を保存済みなら、次で追跡済みのファイルを `HEAD` に戻せます。
+更新 branch では、更新前の commit から manifest・lock・marker・管理設定を戻し、上記の `pnpm install --frozen-lockfile --ignore-scripts` / `uv sync --locked` で環境を復旧します。2.0.0 以前へ戻す場合、今回新しく追加した workflow も戻す対象に含めます。まだ更新を commit しておらず、更新前の作業を保存済みなら、次で追跡済みのファイルを `HEAD` に戻せます。
 
 ```sh
 # TypeScript

@@ -2,9 +2,9 @@
 
 利用側の担当者が、Profile を一つ選び、固定した配布版と設定・lockfile を Git に保存するための手順です。初回導入後の更新は [利用側の更新・復旧](update.md) を使います。
 
-この手順は公開済みの `v2.0.0` を使います。TypeScript の CLI は Node.js 22.13 以上（22 系または 24 以降）/ npm を前提とし、Node.js 24 / npm 12 と Node.js 22.22.2 で検証しています。Python は Python 3.12 / uv 0.11.7 で検証しています。npm・PyPI のアカウント、GitHub 認証、Git submodule は初回導入には不要です。ツールの導入は [Node.js](https://nodejs.org/en/download) / [uv](https://docs.astral.sh/uv/getting-started/installation/) を参照してください。
+この手順は公開済みの `v2.1.0` を使います。TypeScript の CLI は Node.js 22.13 以上（22 系または 24 以降）/ npm を前提とし、Node.js 24 / npm 12 と Node.js 22.22.2 で検証しています。Python は Python 3.12 / uv 0.11.7 で検証しています。npm・PyPI のアカウント、GitHub 認証、Git submodule は初回導入には不要です。ツールの導入は [Node.js](https://nodejs.org/en/download) / [uv](https://docs.astral.sh/uv/getting-started/installation/) を参照してください。
 
-**事前の `npm init` / `uv init` / `npm install` / `uv add` は不要です。** `npx` / `uvx` が固定版の CLI を一時取得し、`--setup` が manifest・設定・依存・lockfile を一括適用します。繰り返し実行でき、案件固有の設定を保持します。書き込み前に確認したい場合は `--setup` を外すと preview、適用後の確認は `--check` です。従来の `--write --sync` も同じ処理として利用できます。
+**事前の `npm init` / `uv init` / `npm install` / `uv add` は不要です。** `npx` / `uvx` が固定版の CLI を一時取得し、`--setup` が manifest・設定・依存・lockfile と `.github/workflows/update-presets.yml` を一括適用します。繰り返し実行でき、案件固有の設定を保持します。書き込み前に確認したい場合は `--setup` を外すと preview、適用後の確認は `--check` です。従来の `--write --sync` も同じ処理として利用できます。
 
 Node.js / npm または Python / uv が前提です。初回の `package.json` / `pyproject.toml` は自動作成します。アプリのコード、DB、secret、本番環境は案件側で用意します。
 
@@ -23,7 +23,7 @@ cd typescript-demo
 # pnpm 未導入でも、このターミナル内で固定版を一時実行できる。
 pnpm() { npx --yes --ignore-scripts --package=pnpm@11.28.0 -- pnpm "$@"; }
 
-PRESET_VERSION=2.0.0
+PRESET_VERSION=2.1.0
 # 初回に一つ選ぶ。node / hono / next はそれぞれ別の構成。
 PRESET_PROFILE=typescript-node
 npx --yes --allow-remote=root --ignore-scripts \
@@ -61,7 +61,7 @@ export default [...preset, { rules: { '@typescript-eslint/no-unused-vars': 'warn
 検証後、既存 Git repository または `git init` した repository に次を commit します。
 
 ```sh
-git add package.json pnpm-lock.yaml eslint.config.mjs tsconfig.json .project-preset.json
+git add package.json pnpm-lock.yaml eslint.config.mjs tsconfig.json .project-preset.json .github/workflows/update-presets.yml
 # 作成したアプリのコードと .gitignore も別途追加する。
 git commit -m "Adopt TypeScript project preset"
 ```
@@ -78,7 +78,7 @@ npm の既存 lock は pnpm 自身の `import` で移行し、依存導入と配
 mkdir python-demo
 cd python-demo
 
-PRESET_VERSION=2.0.0
+PRESET_VERSION=2.1.0
 # 初回に一つ選ぶ。scripts / django / fastapi はそれぞれ別の構成。
 PRESET_PROFILE=python-scripts
 uvx --python 3.12 \
@@ -142,12 +142,22 @@ scripts は `scripts.toml`、FastAPI は `fastapi.toml` を使います。コピ
 検証後、次を commit します。
 
 ```sh
-git add pyproject.toml uv.lock .project-preset.json .project-presets/ruff
+git add pyproject.toml uv.lock .project-preset.json .project-presets/ruff .github/workflows/update-presets.yml
 # アプリのコードと .gitignore も別途追加する。
 git commit -m "Adopt Python project preset"
 ```
 
 `.venv/`、`.ruff_cache/`、`__pycache__/`、開発用の `db.sqlite3` は `.gitignore` に入れます。
+
+## 自動更新 PR を有効にする
+
+TypeScript・Python とも、`--setup` は案件の `.github/workflows/update-presets.yml` を自動作成します。配布パッケージの中に workflow を含めているので、利用側でサンプルを探してコピーする操作は不要です。既存の同名ファイルは、schedule・追加テスト・参照タグを含めてそのまま保持します。preview の `create` に作成予定を表示し、`--check` は workflow があることも確認します。削除して再配置したい場合は `--setup` を再実行します。
+
+上記の導入 commit に workflow も含め、利用側 GitHub repository の既定 branch へ push / マージします。Settings → Actions → General の「Allow GitHub Actions to create and approve pull requests」を有効にすると、毎週月曜 11:15（日本時間）に同じ major の新しい配布版を検証し、差分があれば PR を作ります。専用 PAT の登録は不要です。この GitHub 側の設定や repository の公開・push は CLI から行いません。Actions の手動実行でも確認できます。
+
+PR を作る前に lint / 型チェック / `package.json` の build / test、Django の check / test を実行します。Python スクリプト・FastAPI のアプリテストや追加検証は、生成した workflow の `test-command` に案件のコマンドを設定してください。詳細と GitHub の実行承認については [更新手順](update.md#3-更新-pr-を自動で受け取る) を参照してください。
+
+生成先は指定した project ディレクトリです。GitHub は repository ルートの `.github/workflows/` を実行するので、その project を一つの repository として commit します。既存 monorepo の子 project で使う場合は、生成ファイルを repository ルートに移し、workflow の `directory: apps/api` などを設定します。同じ repository の複数 project は一つの workflow でまとめるなど、案件の構成に合わせます。
 
 ## 既存案件
 
@@ -159,7 +169,7 @@ git commit -m "Adopt Python project preset"
 # pnpm 未導入でも、このターミナル内で固定版を一時実行できる。
 pnpm() { npx --yes --ignore-scripts --package=pnpm@11.28.0 -- pnpm "$@"; }
 
-PRESET_VERSION=2.0.0
+PRESET_VERSION=2.1.0
 # TypeScript / Hono の既存案件の例
 npx --yes --allow-remote=root --ignore-scripts \
   "https://github.com/omitsuhashi/project-presets-demo/releases/download/v${PRESET_VERSION}/project-presets-demo-${PRESET_VERSION}.tgz" \

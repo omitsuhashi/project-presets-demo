@@ -43,6 +43,7 @@ const uvLint = (expected = 0) => JSON.parse(run(py, 'uv', ['run', '--locked', 'r
 
 try {
   const declared = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
+  const release = declared.version;
   for (const profile of Object.values(JSON.parse(readFileSync(join(root, 'profiles.json'), 'utf8')))) {
     if (profile.language !== 'typescript') continue;
     for (const [name, version] of Object.entries({ ...profile.dependencies, ...profile.devDependencies })) {
@@ -75,6 +76,7 @@ try {
   assert(!readFileSync(join(adoption, 'package.json'), 'utf8').includes('devDependencies'));
   run(root, 'node', ['scripts/apply-profile.mjs', 'typescript-node', adoption, '--adopt', '--write']);
   assert.equal(readFileSync(join(adoption, 'eslint.config.mjs'), 'utf8'), existingLint);
+  assert(readFileSync(join(adoption, '.github/workflows/update-presets.yml'), 'utf8').includes(`update-consumer.yml@v${release}`));
 
   mkdirSync(ts);
   writeFileSync(join(ts, 'package.json'), '{"name":"consumer","private":true,"type":"module"}\n');
