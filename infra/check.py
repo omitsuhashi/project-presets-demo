@@ -90,7 +90,7 @@ def check(containers):
             values = {"state_bucket": "demo-state", "deployment_role_arn": "arn:aws:iam::123456789012:role/demo-deployment",
                       "execution_role_arn": "arn:aws:iam::123456789012:role/demo-execution",
                       "task_role_arn": "arn:aws:iam::123456789012:role/demo-task", "vpc_id": "vpc-12345678", "subnet_ids": ["subnet-a", "subnet-b"]}
-            with patch.object(preset, "identity", return_value="123456789012"), patch.object(preset.shutil, "which", return_value="/fake"), patch.object(preset, "tf") as native, patch.object(preset, "outputs", side_effect=[values, {"deployed_image": image}]), patch.object(preset.subprocess, "run", return_value=SimpleNamespace(returncode=0, stdout="", stderr="")):
+            with patch.object(preset, "identity", return_value="123456789012"), patch.object(preset.shutil, "which", return_value="/fake"), patch.object(preset, "tf") as native, patch.object(preset, "outputs", side_effect=[values, {"deployed_image": image}, {"cluster_name": "demo", "service_name": "demo", "task_definition_arn": "task-arn", "url": "http://demo.invalid"}]), patch.object(preset, "run", side_effect=["task-arn", image]), patch.object(preset.subprocess, "run", return_value=SimpleNamespace(returncode=0, stdout="", stderr="")):
                 preset.bootstrap(operator, True)
                 assert any("-migrate-state" in call.args for call in native.call_args_list)
                 assert any(f"-var=image_uri={image}" in call.args for call in native.call_args_list)
@@ -98,12 +98,18 @@ def check(containers):
                 preset.plan(operator)
                 assert any(f"-var=image_uri={image}" in call.args for call in native.call_args_list)
                 assert all("apply" not in call.args for call in native.call_args_list)
-            with patch.object(preset, "tf"), patch.object(preset, "outputs", return_value={"cluster_name": "demo", "service_name": "demo", "url": "http://demo.invalid"}), patch.object(preset, "run", side_effect=["task-arn", "old-image"]):
+            with patch.object(preset, "tf"), patch.object(preset, "outputs", return_value={"cluster_name": "demo", "service_name": "demo", "task_definition_arn": "task-arn", "url": "http://demo.invalid"}), patch.object(preset, "run", side_effect=["task-arn", "old-image"]):
                 try:
                     preset.plan(operator, image=image, apply=True)
                     raise AssertionError("An ECS rollback was reported as successful deployment")
                 except ValueError as error:
                     assert "requested image" in str(error)
+            with patch.object(preset, "outputs", return_value={"cluster_name": "demo", "service_name": "demo", "task_definition_arn": "task-arn"}), patch.object(preset, "run", return_value="previous-task-arn"):
+                try:
+                    preset.verify_deployment(operator, image)
+                    raise AssertionError("Configuration rollback with the same image was reported as successful")
+                except ValueError as error:
+                    assert "requested task revision" in str(error)
             with patch.object(preset, "tf"), patch.object(preset.subprocess, "run", return_value=SimpleNamespace(returncode=2)):
                 try:
                     preset.foundation_plan(operator, require_unchanged=True)
@@ -123,6 +129,12 @@ def check(containers):
             existing.mkdir()
             shutil.copy2(consumer / ("package.json" if profile.startswith("typescript-") else "pyproject.toml"), existing)
             (existing / "Dockerfile").write_text("custom Dockerfile\n")
+            mismatched = "typescript-next" if profile.startswith("typescript-") else "python-django"
+            preset.write_json(existing / ".project-preset.json", {"profile": mismatched})
+            result = subprocess.run([*cli, "init", "--directory", str(existing), "--profile", profile, "--name", "demo", "--repository", "example/consumer"], capture_output=True, text=True)
+            assert result.returncode == 1 and "must match" in result.stderr
+            assert not (existing / "infra").exists()
+            (existing / ".project-preset.json").unlink()
             run(*cli, "init", "--directory", existing, "--profile", profile, "--name", "demo", "--repository", "example/consumer")
             assert (existing / "Dockerfile").read_text() == "custom Dockerfile\n"
             result = subprocess.run([*cli, "bootstrap", "--directory", str(existing)], capture_output=True, text=True)

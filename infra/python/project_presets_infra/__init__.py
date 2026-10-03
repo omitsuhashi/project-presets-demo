@@ -57,7 +57,7 @@ def root(kind, release):
                "assign_public_ip": "bool", "certificate_arn": "string"})
     inputs["region"] = "string"
     outputs = (["state_bucket", "deployment_role_arn", "execution_role_arn", "task_role_arn", "vpc_id", "subnet_ids"]
-               if kind == "aws-foundation" else ["repository_url", "deployed_image", "url", "cluster_name", "service_name"])
+               if kind == "aws-foundation" else ["repository_url", "deployed_image", "url", "cluster_name", "service_name", "task_definition_arn"])
     return {
         "terraform": {"required_version": ">= 1.10, < 2.0",
                       "required_providers": {"aws": {"source": "hashicorp/aws", "version": f"= {PROVIDER}"}}},
@@ -81,7 +81,10 @@ def init(target, args):
     application = target / ".project-preset.json"
     if args.profile is None and not application.exists():
         raise ValueError("Run an application preset --setup first, or use --profile with an existing app")
-    profile = args.profile or json.loads(application.read_text())["profile"]
+    configured = json.loads(application.read_text())["profile"] if application.exists() else None
+    if args.profile and configured and args.profile != configured:
+        raise ValueError("Infrastructure profile must match the existing application preset")
+    profile = args.profile or configured
     if profile not in PROFILES:
         raise ValueError("The first deployment demo supports typescript-hono and python-fastapi")
     manifest = "package.json" if profile.startswith("typescript-") else "pyproject.toml"
@@ -215,6 +218,8 @@ def bootstrap(target, apply):
     image = values.get("deployed_image", "")
     tf(app, "plan", "-input=false", f"-var=image_uri={image}", "-out=bootstrap.tfplan")
     tf(app, "apply", "bootstrap.tfplan")
+    if image:
+        verify_deployment(target, image)
     write_json(target / "infra/aws.json", {"account": account, "region": state["region"], "role": deployment_role})
     print("Bootstrap complete. Commit infra/*.json, root calls, native provider locks and workflows. Never commit state/plans or AWS credentials.")
 
@@ -246,15 +251,21 @@ def plan(target, image=None, apply=False):
     tf(app, "plan", "-input=false", f"-var=image_uri={image}", "-lock-timeout=5m", "-out=deployment.tfplan")
     if apply:
         tf(app, "apply", "-input=false", "deployment.tfplan")
-        values = outputs(app)
-        region = json.loads((target / "infra/.project-infra.json").read_text())["region"]
-        active = run("aws", "ecs", "describe-services", "--region", region, "--cluster", values["cluster_name"],
-                     "--services", values["service_name"], "--query", "services[0].taskDefinition", "--output", "text", capture=True)
-        deployed = run("aws", "ecs", "describe-task-definition", "--region", region, "--task-definition", active,
-                       "--query", "taskDefinition.containerDefinitions[?name=='app'].image | [0]", "--output", "text", capture=True)
-        if deployed != image:
-            raise ValueError("ECS did not keep the requested image; inspect the deployment rollback/events")
-        print(values["url"])
+        print(verify_deployment(target, image))
+
+
+def verify_deployment(target, image):
+    values = outputs(target / "infra/app")
+    region = json.loads((target / "infra/.project-infra.json").read_text())["region"]
+    active = run("aws", "ecs", "describe-services", "--region", region, "--cluster", values["cluster_name"],
+                 "--services", values["service_name"], "--query", "services[0].taskDefinition", "--output", "text", capture=True)
+    if active != values["task_definition_arn"]:
+        raise ValueError("ECS did not keep the requested task revision; inspect the deployment rollback/events")
+    deployed = run("aws", "ecs", "describe-task-definition", "--region", region, "--task-definition", active,
+                   "--query", "taskDefinition.containerDefinitions[?name=='app'].image | [0]", "--output", "text", capture=True)
+    if deployed != image:
+        raise ValueError("ECS did not keep the requested image; inspect the deployment rollback/events")
+    return values["url"]
 
 
 def container_check(target, image=None):

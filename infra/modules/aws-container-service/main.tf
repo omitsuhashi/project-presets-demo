@@ -33,6 +33,10 @@ variable "environment" {
 variable "secret_arns" {
   type    = map(string)
   default = {}
+  validation {
+    condition     = alltrue([for arn in values(var.secret_arns) : can(regex("^arn:aws:(secretsmanager:[a-z0-9-]+:[0-9]{12}:secret:[A-Za-z0-9/_+=.@-]+|ssm:[a-z0-9-]+:[0-9]{12}:parameter/[A-Za-z0-9_./-]+)$", arn))])
+    error_message = "Use literal Secrets Manager or SSM parameter ARNs; wildcard permissions and secret values are not supported."
+  }
 }
 variable "cpu" {
   type    = number
@@ -220,5 +224,6 @@ resource "aws_ecs_service" "app" {
 output "repository_url" { value = aws_ecr_repository.app.repository_url }
 output "cluster_name" { value = aws_ecs_cluster.app.name }
 output "service_name" { value = var.name }
+output "task_definition_arn" { value = try(aws_ecs_task_definition.app[0].arn, null) }
 output "deployed_image" { value = var.image_uri }
 output "url" { value = "${var.certificate_arn == null ? "http" : "https"}://${aws_lb.app.dns_name}" }
