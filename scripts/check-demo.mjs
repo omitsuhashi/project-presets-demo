@@ -76,7 +76,7 @@ try {
   assert(!readFileSync(join(adoption, 'package.json'), 'utf8').includes('devDependencies'));
   run(root, 'node', ['scripts/apply-profile.mjs', 'typescript-node', adoption, '--adopt', '--write']);
   assert.equal(readFileSync(join(adoption, 'eslint.config.mjs'), 'utf8'), existingLint);
-  assert(readFileSync(join(adoption, '.github/workflows/update-presets.yml'), 'utf8').includes(`update-consumer.yml@typescript-v${release}`));
+  assert(readFileSync(join(adoption, '.github/workflows/update-presets.yml'), 'utf8').includes(`update-consumer.yml@v${release}`));
 
   mkdirSync(ts);
   writeFileSync(join(ts, 'package.json'), '{"name":"consumer","private":true,"type":"module"}\n');

@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Stable version. Empty follows the current major.'
+        description: 'Template version. Empty follows the current major.'
         default: ''
         type: string
 

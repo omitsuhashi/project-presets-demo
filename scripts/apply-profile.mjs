@@ -10,8 +10,8 @@ import { parseArgs } from 'node:util';
 const root = fileURLToPath(new URL('../', import.meta.url));
 const catalog = JSON.parse(readFileSync(join(root, 'profiles.json'), 'utf8'));
 const { version: release, dependencies } = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
-const [major, minor] = release.split('.').map(Number);
-const tag = `${major > 2 || (major === 2 && minor >= 2) ? 'typescript-' : ''}v${release}`;
+const publication = existsSync(join(root, 'preset-release.json')) ? JSON.parse(readFileSync(join(root, 'preset-release.json'), 'utf8')) : null;
+const tag = publication?.tag ?? `v${release}`;
 const packageManager = `pnpm@${dependencies.pnpm}`;
 const { values: options, positionals } = parseArgs({
   options: {
@@ -28,6 +28,7 @@ assert(!sync || write, '--sync requires --write or --setup');
 assert(positionals.length >= 1 && positionals.length <= 2, 'Usage: project-presets PROFILE [DIRECTORY] [--setup | --write | --check] [--adopt] [--sync] [--source URL]');
 const [id, directory = '.'] = positionals;
 assert(Object.hasOwn(catalog, id), `Unknown profile: ${id}. Choose ${Object.keys(catalog).join(', ')}`);
+assert(!publication || (publication.profile === id && publication.version === release), 'The artifact does not match the selected template/version');
 const profile = catalog[id];
 if (profile.language === 'python') {
   console.log(JSON.stringify(profile, null, 2));
@@ -78,7 +79,7 @@ if (profile.language === 'python') {
   }
   assert(!Object.hasOwn(manifest.dependencies, 'project-presets-demo'), 'The preset package must be a devDependency');
   const base = 'https://github.com/omitsuhashi/project-presets-demo/releases/download/';
-  const artifact = `${base}${tag}/project-presets-demo-${release}.tgz`;
+  const artifact = `${base}${tag}/${publication?.asset ?? `project-presets-demo-${release}.tgz`}`;
   const previousSource = manifest.devDependencies['project-presets-demo'];
   assert(previousSource === undefined || typeof previousSource === 'string', 'Invalid preset dependency');
   const source = options.source ?? (previousSource === undefined || previousSource.startsWith(base) ? artifact : previousSource);

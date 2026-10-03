@@ -76,4 +76,4 @@ CI では manifest / catalog の整合性、Hono の応答、Next.js の build�
 
 MIT License.
 
-2.2.0 からの配布は言語ごとに独立します（現時点では未公開）。TypeScript は `typescript-vX.Y.Z`、Python は `python-vX.Y.Z` を使い、変更した言語だけ版を上げます。更新処理は対象言語の配布物だけを選び、同じ版なら終了します。既存 workflow の移行は [更新手順](docs/update.md#言語別リリースへの移行) を参照してください。
+2.2.0 からは6テンプレートの版を独立して管理します（現時点では未公開）。公開は1回につき `vX.Y.Z` タグ1つと Release 1つです。`release-manifest.json` が各テンプレートの版・元の配布先を記録し、変更したテンプレートだけ build します。利用側は自分のテンプレートが同じ版なら終了します。[公開手順](docs/publish.md) と [既存 workflow の移行](docs/update.md#テンプレート別リリースへの移行) を参照してください。

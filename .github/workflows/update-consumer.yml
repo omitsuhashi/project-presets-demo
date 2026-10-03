@@ -4,7 +4,7 @@ on:
   workflow_call:
     inputs:
       version:
-        description: Empty selects the latest stable release for the consumer's language in the current major
+        description: Empty selects the latest stable release for the consumer's template in the current major
         type: string
         default: ''
       provider-ref:

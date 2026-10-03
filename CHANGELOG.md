@@ -1,13 +1,14 @@
 # Changelog
 
-## TypeScript 2.2.0 / Python 2.2.0（未公開）
+## v2.2.0（未公開、全テンプレートの初版 2.2.0）
 
-- TypeScript と Python の版管理を分離。`typescript-vX.Y.Z` は npm tarball、`python-vX.Y.Z` は wheel / sdist を公開し、変更した言語だけ版を上げる。
-- npm に Python の設定・CLI・catalog を同梱しない。更新 workflow の共通テンプレートだけを両パッケージに含める。
-- 更新処理は言語・配布物・stable / major を確認し、導入済みと同じ版なら再導入や PR 作成を行わない。既存の統合タグは引き続き選択可能。
-- 初回 setup は言語別タグへ workflow と updater checkout を固定する。既存 workflow は保持するため、参照タグと `provider-ref` の明示的な移行が必要。
+- Node / Hono / Next、scripts / Django / FastAPI の版を独立管理し、1つのタグ・Release に変更したテンプレートだけを公開する。
+- `release-manifest.json` に全テンプレートの版・配布元タグ・ファイル名・変更検出用の入力ハッシュを記録。未変更の版と URL は引き継ぐ。
+- 共通の準備・build 処理で有効な入力を比較し、変更がなければ manifest を変更しない。Python wheel は標準の build tag でテンプレートを識別する。
+- 利用側は選択中のテンプレートの stable / major と成果物を確認し、同じ版ならファイル変更・再導入・PR 作成を行わない。2.1.0 以前の統合配布も引き続き利用できる。
+- 初回 setup は共通の公開タグに workflow と updater checkout を固定する。既存 workflow は保持するため、参照タグと `provider-ref` の移行が必要。
 
-Profile の依存版・lint ルールは 2.1.0 と同じ。
+Profile の依存版・lint ルールは 2.1.0 と同じ。公開タグの版とテンプレートの版は次回以降一致するとは限らない。
 
 ## 2.1.0
 

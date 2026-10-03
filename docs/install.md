@@ -190,6 +190,21 @@ uv run --locked project-presets-python python-django --check
 
 参照: [npm exec / npx](https://docs.npmjs.com/cli/v12/commands/npm-exec/)、[pnpm install](https://pnpm.io/cli/install)、[pnpm import](https://pnpm.io/cli/import)、[uvx](https://docs.astral.sh/uv/guides/tools/)、[uv の依存管理](https://docs.astral.sh/uv/concepts/projects/dependencies/)、[Ruff の継承と上書き](https://docs.astral.sh/ruff/configuration/)。
 
-## 言語別の配布 URL
+## テンプレート別の配布 URL
 
-上記の 2.1.0 は公開済みの統合配布です。2.2.0 以降の公開後は、TypeScript の URL を `releases/download/typescript-vX.Y.Z/project-presets-demo-X.Y.Z.tgz`、Python の URL を `releases/download/python-vX.Y.Z/project_presets_demo-X.Y.Z-py3-none-any.whl` にします。各言語で実際に公開されている版を選び、版番号を揃える必要はありません。2.2.0 はこの変更で準備する版であり、PR のマージだけでは公開されません。
+上記の 2.1.0 は公開済みの統合配布です。v2.2.0 はこの変更で準備する未公開版で、PR のマージだけでは公開されません。
+
+公開後は Release の `release-manifest.json` の `profiles[PROFILE]` から `version`・`tag`・`asset` を読み、`https://github.com/omitsuhashi/project-presets-demo/releases/download/{tag}/{asset}` を使います。最新 Release のタグに置き換えないでください。未変更テンプレートは元の配布 URL のままです。
+
+初回 v2.2.0 の例:
+
+```sh
+npx --yes --ignore-scripts --allow-remote=root \
+  https://github.com/omitsuhashi/project-presets-demo/releases/download/v2.2.0/typescript-hono-2.2.0.tgz \
+  typescript-hono my-hono --setup
+uvx --python 3.12 \
+  --from https://github.com/omitsuhashi/project-presets-demo/releases/download/v2.2.0/project_presets_demo-2.2.0-1django-py3-none-any.whl \
+  project-presets-python python-django my-django --setup
+```
+
+成果物は選択したテンプレートだけに対応します。版番号を6つ揃える必要はありません。

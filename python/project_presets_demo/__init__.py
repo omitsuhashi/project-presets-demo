@@ -62,10 +62,15 @@ def apply(args):
     if "project" not in manifest:
         raise ValueError("pyproject.toml must define [project]; add project metadata before applying the preset")
     release = metadata.version("project-presets-demo")
-    tag = ("python-" if tuple(map(int, release.split("."))) >= (2, 2, 0) else "") + f"v{release}"
+    publication_path = Path(__file__).parent / "release.json"
+    publication = json.loads(publication_path.read_text()) if publication_path.exists() else None
+    if publication and (publication["profile"] != args.profile or publication["version"] != release):
+        raise ValueError("The artifact does not match the selected template/version")
+    tag = publication["tag"] if publication else f"v{release}"
     ruff = next(item.removeprefix("ruff==") for item in metadata.requires("project-presets-demo") if item.startswith("ruff=="))
     base = "https://github.com/omitsuhashi/project-presets-demo/releases/download/"
-    artifact = args.source or f"{base}{tag}/project_presets_demo-{release}-py3-none-any.whl"
+    filename = publication["asset"] if publication else f"project_presets_demo-{release}-py3-none-any.whl"
+    artifact = args.source or f"{base}{tag}/{filename}"
     dev = manifest.get("dependency-groups", {}).get("dev", [])
     has_preset = any(isinstance(item, str) and re.split(r"[^a-z0-9_-]", item.lower().strip(), maxsplit=1)[0].replace("_", "-") == "project-presets-demo" for item in dev)
     preset_source = manifest.get("tool", {}).get("uv", {}).get("sources", {}).get("project-presets-demo", {})
