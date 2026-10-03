@@ -1,0 +1,45 @@
+name: Publish independent AWS infrastructure release
+
+on:
+  push:
+    tags: ['infra-aws-container-v*']
+
+permissions:
+  contents: write
+
+jobs:
+  check:
+    uses: ./.github/workflows/infra-check.yml
+  release:
+    needs: check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@94527f2e458b27549849d47d273a16bec83a01e9 # v7
+        with:
+          version: '0.11.7'
+          python-version: '3.12'
+      - name: Check independent version and build distribution
+        run: |
+          python3 - <<'PY'
+          import os, re, tomllib
+          version = tomllib.load(open('infra/pyproject.toml', 'rb'))['project']['version']
+          assert re.fullmatch(r'[0-9]+\.[0-9]+\.[0-9]+', version)
+          assert os.environ['GITHUB_REF_NAME'] == 'infra-aws-container-v' + version
+          PY
+          uv build --project infra --out-dir "$PWD/dist/infra"
+          cd dist/infra
+          sha256sum -- ./*.whl ./*.tar.gz > SHA256SUMS
+      - name: Publish without changing the application's latest release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" dist/infra/* --verify-tag --draft --generate-notes --title "$GITHUB_REF_NAME"
+          gh release edit "$GITHUB_REF_NAME" --draft=false --latest=false
+          gh auth setup-git
+          major=$(python3 -c 'import tomllib; print(tomllib.load(open("infra/pyproject.toml","rb"))["project"]["version"].split(".")[0])')
+          branch="infra-tools/v$major"
+          old=$(git ls-remote --heads origin "$branch" | cut -f1)
+          git push --force-with-lease="refs/heads/$branch:$old" origin "HEAD:refs/heads/$branch"

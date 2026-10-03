@@ -28,6 +28,7 @@ uvx --python 3.12 \
 | --- | --- | --- |
 | 利用側: 初めて導入する | [TypeScript / Python の導入](docs/install.md) | Profile・配布版・設定・lock を固定して commit |
 | 配布側: 共通設定・依存を更新する | [配布物の更新・公開](docs/publish.md) | 検証済み commit にタグを付け、Release の配布物を公開 |
+| 利用側: AWS インフラと配置を追加する | [インフラの導入・更新・デプロイ](docs/infrastructure.md) | 固定 Terraform module・Dockerfile・配置 / 更新 PR workflow を追加 |
 | 利用側: 新版を適用する | [更新 PR・適用・復旧](docs/update.md) | 更新をレビューしてマージし、lock から実行環境を再構築 |
 
 配布側の更新 PR → 固定タグ / GitHub Release → 利用側の更新 PR → マージ / 依存の再導入、という流れです。`--setup` が `.github/workflows/update-presets.yml` を配置します。GitHub の既定 branch へ commit / push し、Settings → Actions → General の「Allow GitHub Actions to create and approve pull requests」を有効にすると、毎週月曜 11:15（日本時間）に同じ major の新しい配布版を検証し、差分があれば更新 PR を作ります。Release 公開後の適用は、この PR をレビューしてマージします。詳細は [更新手順](docs/update.md#3-更新-pr-を自動で受け取る) を参照してください。
@@ -53,9 +54,15 @@ ESLint 9 は [2026-08-06 に EOL](https://eslint.org/version-support/) です。
 
 - TypeScript: Profile の実行用 / 開発用依存と marker を管理。利用側は共通 package の設定を import / extends し、案件固有の上書きを保守。
 - Python: framework は実行用依存、preset / Ruff は開発用依存。コピーした共通設定と marker を管理し、案件固有の上書きは `pyproject.toml` で保守。
-- 両言語: アプリのコード・追加テスト・フレームワーク移行・DB migration・デプロイは利用側の責任。管理依存・Python の配布設定の手動変更 / 削除、TypeScript の設定ファイルの削除、Profile 切替は CLI が検出して停止。
+- 両言語: アプリのコード・追加テスト・フレームワーク移行・DB migration は利用側の責任。Hono / FastAPI の AWS 配置は、独立したインフラ preset を追加して自動化できる。管理依存・Python の配布設定の手動変更 / 削除、TypeScript の設定ファイルの削除、Profile 切替は CLI が検出して停止。
 
 [配布側の Dependabot](.github/dependabot.yml) は更新候補を作ります。採用版と共通設定を揃え、[release workflow](.github/workflows/release.yml) で検証・公開します。公開済みタグ・配布物は差し替えません。更新用 script は [scripts/update-consumer.py](scripts/update-consumer.py) です。
+
+## AWS インフラを追加する
+
+[インフラ preset](docs/infrastructure.md) は `project-presets-infra` wheel と、固定 Git タグの Terraform module を配布します。`init` が Dockerfile・ECS Fargate / ECR / ALB・S3 state / OIDC 用の module 参照・配置 / 更新 PR workflow を生成します。アプリ用 `v2.1.0` とは独立した **`infra-aws-container-v1.0.0`** で配布し、インフラだけの更新でアプリ package の版を変更しません。
+
+初期対象は `typescript-hono` / `python-fastapi` です。AWS アカウント・認証なしでファイルを準備し、コンテナと Terraform mock を検証できます。AWS を用意した後に bootstrap を明示的に実行し、以後は既定 branch の push で配置します。認証なしのローカル / CI 検証と、実 AWS でのデプロイ検証は別です。
 
 ## 検証
 

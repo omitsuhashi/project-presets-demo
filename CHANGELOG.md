@@ -1,5 +1,14 @@
 # Changelog
 
+## infra-aws-container-v1.0.0
+
+- アプリ用の版から独立した `project-presets-infra` wheel と AWS Terraform module を GitHub Release / 固定タグで配布。
+- Hono / FastAPI に Dockerfile、最小 HTTP サンプル、S3 state / OIDC / IAM / VPC の foundation と ECR / ECS Fargate / ALB / ログの app root を生成。AWS 認証は初期化時に不要。
+- operator の `bootstrap --apply`、image digest を Terraform で管理する deploy、コンテナの health check、稼働 image を保持する plan を追加。
+- module / provider / 管理 Dockerfile を保持チェック付きで更新して PR 化。利用側の変数・追加 resource・独自 Dockerfile を保持し、foundation の権限変更は operator が適用。
+- Terraform mock、配布 wheel、設定更新と競合、Hono / FastAPI の非 root コンテナを AWS 認証なしで CI 検証。実 AWS への配置・IAM 許可判定は認証準備後に検証する。
+
+
 ## 2.1.0
 
 - TypeScript / Python の bootstrap に `.github/workflows/update-presets.yml` の配置を追加。npm tarball と Python wheel に同じ workflow を含め、`npx` / `uvx` の `--setup` 一回で更新 PR の下地も作る。
