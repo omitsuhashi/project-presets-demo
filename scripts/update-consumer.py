@@ -25,25 +25,45 @@ def main():
     target = Path(args.directory).resolve()
     state = json.loads((target / ".project-preset.json").read_text())
     current = version(state["release"])
-    selected = args.version.removeprefix("v")
+    profile = state["profile"]
+    language = profile.split("-", 1)[0]
+    if profile not in {"typescript-node", "typescript-hono", "typescript-next", "python-scripts", "python-django", "python-fastapi"}:
+        raise ValueError(f"Unsupported profile: {profile}")
+    selected = args.version.removeprefix(f"{language}-").removeprefix("v")
+    tag = args.version if args.version.startswith((f"{language}-v", "v")) else ""
     if not selected:
-        tags = subprocess.check_output([
-            "gh", "api", f"repos/{REPOSITORY}/releases", "--paginate", "--jq",
-            ".[] | select(.draft == false and .prerelease == false) | .tag_name",
-        ], text=True).splitlines()
-        compatible = [tag.removeprefix("v") for tag in tags if re.fullmatch(r"v?[0-9]+\.[0-9]+\.[0-9]+", tag)]
-        compatible = [item for item in compatible if version(item)[0] == current[0] and version(item) >= current]
+        pages = json.loads(subprocess.check_output([
+            "gh", "api", f"repos/{REPOSITORY}/releases", "--paginate", "--slurp",
+        ], text=True))
+        compatible = []
+        for release in (item for page in pages for item in page):
+            match = re.fullmatch(rf"(?:{language}-)?v([0-9]+\.[0-9]+\.[0-9]+)", release["tag_name"])
+            if not match or release["draft"] or release["prerelease"]:
+                continue
+            candidate = match[1]
+            filename = (f"project-presets-demo-{candidate}.tgz" if language == "typescript"
+                        else f"project_presets_demo-{candidate}-py3-none-any.whl")
+            if (version(candidate)[0] == current[0] and version(candidate) > current
+                    and any(asset["name"] == filename for asset in release["assets"])):
+                compatible.append((candidate, release["tag_name"]))
         if not compatible:
-            raise ValueError("No compatible release found; major migrations require an explicit --version")
-        selected = max(compatible, key=version)
+            selected = state["release"]
+        else:
+            selected, tag = max(compatible, key=lambda item: version(item[0]))
     version(selected)
-    base = f"https://github.com/{REPOSITORY}/releases/download/v{selected}"
+    if selected == state["release"]:
+        if os.environ.get("GITHUB_OUTPUT"):
+            with Path(os.environ["GITHUB_OUTPUT"]).open("a") as output:
+                output.write("changed=false\n")
+        print(f"{profile} is already at {selected}; no update needed")
+        return
+    tag = tag or (f"{language}-" if version(selected) >= (2, 2, 0) else "") + f"v{selected}"
+    base = f"https://github.com/{REPOSITORY}/releases/download/{tag}"
     artifacts = args.artifacts.resolve() if args.artifacts else None
 
     def run(*command):
         subprocess.run(command, cwd=target, check=True, env={**os.environ, "CI": "true", "pnpm_config_ignore_scripts": "true"})
 
-    profile = state["profile"]
     if profile in {"typescript-node", "typescript-hono", "typescript-next"}:
         if version(selected)[0] < 2:
             raise ValueError("Use the v1.5.0 updater for TypeScript 1.x; migrate with --version 2.0.0, or revert the migration PR")
@@ -72,6 +92,9 @@ def main():
         raise ValueError(f"Unsupported profile: {profile}")
     if json.loads((target / ".project-preset.json").read_text())["release"] != selected:
         raise ValueError("The artifact version differs from the selected release; do not merge")
+    if os.environ.get("GITHUB_OUTPUT"):
+        with Path(os.environ["GITHUB_OUTPUT"]).open("a") as output:
+            output.write("changed=true\n")
     print(f"Updated {profile} from {state['release']} to {selected}; review and commit the diff")
 
 

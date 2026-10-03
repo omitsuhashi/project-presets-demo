@@ -54,7 +54,7 @@ try {
   for (const path of ['package.json', 'typescript', 'python', 'profiles.json', 'profiles', 'scripts', 'LICENSE']) {
     cpSync(join(root, path), join(provider, path), { recursive: true });
   }
-  const catalog = JSON.parse(readFileSync(join(provider, 'profiles.json'), 'utf8'));
+  const catalog = { ...JSON.parse(readFileSync(join(provider, 'profiles.json'), 'utf8')), ...JSON.parse(readFileSync(join(provider, 'python/profiles.json'), 'utf8')) };
   const currentNodeTypes = catalog['typescript-node'].devDependencies['@types/node'];
   const currentRuff = catalog['python-scripts'].devDependencies.ruff;
   declared.version = '1.0.0';
@@ -62,7 +62,7 @@ try {
   catalog['typescript-node'].devDependencies['@types/node'] = '24.19.0';
   catalog['python-scripts'].devDependencies.ruff = '0.16.9';
   writeFileSync(join(provider, 'profiles/python-scripts/requirements-dev.txt'), 'ruff==0.16.9\n');
-  writeFileSync(join(provider, 'profiles.json'), JSON.stringify(catalog, null, 2) + '\n');
+  writeFileSync(join(provider, 'profiles.json'), JSON.stringify(Object.fromEntries(Object.entries(catalog).filter(([, profile]) => profile.language === 'typescript')), null, 2) + '\n');
   const oldSha = commit(provider, 'Release v1.0.0');
   git(provider, 'tag', 'v1.0.0');
   git(provider, 'branch', 'release/v1');
@@ -76,7 +76,7 @@ try {
   assert(!readFileSync(join(adoption, 'package.json'), 'utf8').includes('devDependencies'));
   run(root, 'node', ['scripts/apply-profile.mjs', 'typescript-node', adoption, '--adopt', '--write']);
   assert.equal(readFileSync(join(adoption, 'eslint.config.mjs'), 'utf8'), existingLint);
-  assert(readFileSync(join(adoption, '.github/workflows/update-presets.yml'), 'utf8').includes(`update-consumer.yml@v${release}`));
+  assert(readFileSync(join(adoption, '.github/workflows/update-presets.yml'), 'utf8').includes(`update-consumer.yml@typescript-v${release}`));
 
   mkdirSync(ts);
   writeFileSync(join(ts, 'package.json'), '{"name":"consumer","private":true,"type":"module"}\n');
@@ -168,7 +168,7 @@ ignore = ["F401"]\n`);
   catalog['typescript-node'].devDependencies['@types/node'] = currentNodeTypes;
   catalog['python-scripts'].devDependencies.ruff = currentRuff;
   writeFileSync(join(provider, 'profiles/python-scripts/requirements-dev.txt'), `ruff==${currentRuff}\n`);
-  writeFileSync(join(provider, 'profiles.json'), JSON.stringify(catalog, null, 2) + '\n');
+  writeFileSync(join(provider, 'profiles.json'), JSON.stringify(Object.fromEntries(Object.entries(catalog).filter(([, profile]) => profile.language === 'typescript')), null, 2) + '\n');
   const newSha = commit(provider, 'Release v2.0.0');
   git(provider, 'tag', 'v2.0.0');
   install('v2.0.0');

@@ -6,7 +6,16 @@
 
 [Dependabot](../.github/dependabot.yml) は npm・uv・GitHub Actions の更新候補を毎週 PR にします。手動で候補を選んでも同じ手順です。候補 PR のマージだけでは配布物は公開されません。
 
-配布版は npm と Python で同じ `X.Y.Z` にします。
+配布版は言語ごとに独立して管理します。変更した言語だけ版を上げ、対応するタグだけ公開します。
+
+| 言語 | 版の管理元 | 新しいタグ | 配布物 |
+| --- | --- | --- | --- |
+| TypeScript | `package.json` | `typescript-vX.Y.Z` | npm tarball |
+| Python | `pyproject.toml` / `uv.lock` | `python-vX.Y.Z` | wheel / sdist |
+
+2.1.0 以前の `vX.Y.Z` は統合配布として保持します。新規公開では使いません。この変更では両方に更新処理の変更があるため 2.2.0 を準備します。以後は一方だけ 2.2.1 に上げても、もう一方を 2.2.0 のままにできます。同じ言語の Node / Hono / Next、scripts / Django / FastAPI は現在一つのパッケージです。
+
+テスト・手順書・CI だけの変更では利用側のパッケージ版を上げません。共通の更新 script / workflow テンプレートの動作を変えた場合は、その変更が必要な両言語を更新します。
 
 | 変更 | 配布版の判断 |
 | --- | --- |
@@ -47,8 +56,8 @@ pnpm install --frozen-lockfile --ignore-scripts
 | TypeScript / ESLint / Hono / Next.js / React / 型定義 | `profiles.json` の依存、`package.json` の `dependencies`（ESLint / TypeScript）または検証用 `devDependencies`、該当する `peerDependencies` / 設定 |
 | npm パッケージ自体が依存する共通 lint ツール | `package.json` の `dependencies`、必要な設定 |
 | pnpm | `package.json` の `dependencies.pnpm` / `packageManager`、CI と手順書の固定版。一時 CLI と利用側は同じ pnpm を使う |
-| Ruff | `pyproject.toml` の `dependencies`、全 Python Profile の `devDependencies`、互換用 `profiles/python-scripts/requirements-dev.txt` |
-| Django / FastAPI / Uvicorn | `pyproject.toml` の `optional-dependencies`、対応 Profile の `dependencies` |
+| Ruff | `pyproject.toml` の `dependencies`、`python/profiles.json` の全 Profile の `devDependencies`、互換用 `profiles/python-scripts/requirements-dev.txt` |
+| Django / FastAPI / Uvicorn | `pyproject.toml` の `optional-dependencies`、`python/profiles.json` の対応 Profile の `dependencies` |
 | TypeScript の共通設定 | `typescript/` |
 | Python の共通設定 | `python/project_presets_demo/config/` |
 | CLI / 更新処理 | `scripts/apply-profile.mjs` / `python/project_presets_demo/__init__.py` / `scripts/update-consumer.py` |
@@ -60,32 +69,32 @@ manifest の更新には pnpm / uv の通常の操作を使えます。Python �
 ```sh
 # DJANGO_VERSION に検証対象の実在する版を設定した後に実行する。
 uv add --optional django "django==${DJANGO_VERSION}" --no-sync
-# profiles.json の python-django の版も同じ値にする。
+# python/profiles.json の python-django の版も同じ値にする。
 ```
 
 配布元の lockfile は配布元の検証環境を固定します。**その lockfile 自体は利用側にコピーされません。** 利用側へ配る固定版は package metadata / Profile に含めます。間接依存だけの lock 更新を利用側にも当てる場合は、利用側の lock 更新 PR を別途作って検証します。
 
 ## 3. 配布版と変更説明を更新する
 
-次は `2.1.1` を準備する例です。公開済みかを確認し、未使用の版を選んでください。この例の実行は公開操作ではありません。
+次は TypeScript のみ `2.2.1` を準備する例です。公開済みかを確認し、未使用の版を選んでください。Python の版は変更しません。
 
 ```sh
-PRESET_RELEASE=2.1.1
+PRESET_RELEASE=2.2.1
 pnpm version "$PRESET_RELEASE" --no-git-tag-version --no-git-checks --config.ignore-scripts=true
-uv version "$PRESET_RELEASE" --no-sync
 pnpm install --lockfile-only --no-frozen-lockfile --ignore-scripts
+```
+
+Python の変更なら上記に代えて実行します。TypeScript の版は変更しません。
+
+```sh
+PRESET_RELEASE=2.2.1
+uv version "$PRESET_RELEASE" --no-sync
 uv lock
 ```
 
-`pnpm version` が `package.json`、続く pnpm install が `pnpm-lock.yaml` を更新し、`uv version` が `pyproject.toml` / `uv.lock` の版を更新します。lockfile を文字列置換で編集しません。[pnpm](https://pnpm.io/cli/install)、[uv version](https://docs.astral.sh/uv/reference/cli/#uv-version)。
+lockfile を文字列置換で編集しません。[pnpm](https://pnpm.io/cli/install)、[uv version](https://docs.astral.sh/uv/reference/cli/#uv-version)。`CHANGELOG.md` は言語・版・変更内容・移行作業を明記します。公開前の版を公開済みとして手順書に書きません。
 
-次も更新して同じ PR に含めます。
-
-- `CHANGELOG.md`: 変更、互換性、対象 Profile、利用側で必要な作業。
-- `README.md` / `docs/install.md` / `docs/update.md`: 推奨する配布版・依存の版・公開 URL・実行例。
-- `.github/workflows/update-consumer.yml` の配布元 checkout の `ref` と、`python/project_presets_demo/update-presets.yml` の配布用 workflow の固定タグ: 新しい配布タグを指定。CLI はこのファイルをパッケージに含め、利用側の初回 setup 時に実行した配布版のタグへ固定して配置する。
-
-新しいタグは CI 中には未公開ですが、通常の検証 workflow はこの reusable workflow を呼び出しません。配布物の公開後に、そのタグで利用側の workflow を実行します。新しい Profile や更新 CLI を使う利用側には、workflow の参照タグの更新も案内します。
+workflow テンプレートの `PRESET_TAG` は CLI が対象言語の実行版に置き換え、reusable workflow と `provider-ref` の両方へ固定します。既存利用側の workflow は保持するため、参照の移行は [更新手順](update.md#言語別リリースへの移行) に従います。`.github/workflows/update-consumer.yml` の checkout は利用側が渡した `provider-ref` を使います。
 
 ## 4. 検証して PR をマージする
 
@@ -95,7 +104,7 @@ uv lock --check
 pnpm run lint
 pnpm run demo:ts
 pnpm run demo:py
-uv run --locked ruff check --config python/base.toml python/project_presets_demo scripts/check-packages.py scripts/update-consumer.py
+uv run --locked ruff check --config python/base.toml python/project_presets_demo scripts/check-packages.py scripts/update-consumer.py scripts/check-release-routing.py
 pnpm test
 git diff --check
 ```
@@ -108,43 +117,33 @@ CI は catalog と manifest の版、Hono / Next.js、Python の各構成を検�
 
 ## 5. 検証した commit を公開する
 
-PR のマージ後、`main` の CI 成功を確認してから実行します。`PRESET_RELEASE` は準備した版です。
+PR のマージ後、`main` の CI 成功を確認してから、変更した言語のタグだけ push します。TypeScript の例です。Python の公開なら `PRESET_LANGUAGE=python` にし、`uv version --short` で版を確認します。
 
 ```sh
 git switch main
 git pull --ff-only
-PRESET_RELEASE=2.1.1
-# npm と Python の版がこの値と一致することを確認する。
+PRESET_LANGUAGE=typescript
+PRESET_RELEASE=2.2.1
 node -p "JSON.parse(require('node:fs').readFileSync('package.json')).version"
-uv version --short
-git tag "v${PRESET_RELEASE}"
-git push origin "v${PRESET_RELEASE}"
+PRESET_TAG="${PRESET_LANGUAGE}-v${PRESET_RELEASE}"
+git tag "$PRESET_TAG"
+git push origin "$PRESET_TAG"
 ```
 
-[release workflow](../.github/workflows/release.yml) がタグと二つのパッケージ版の一致を確認し、lint・デモ・更新テストを再実行します。成功すると以下を build して draft Release に添付し、公開します。
+[release workflow](../.github/workflows/release.yml) はタグと対象パッケージの版だけを照合し、既存の lint・デモ・更新テストを実行します。成功した場合、対象言語の配布物と `SHA256SUMS` だけを draft Release に添付して公開します。別言語の配布物は build / 公開しません。
 
-- npm tarball: `project-presets-demo-X.Y.Z.tgz`
-- Python wheel: `project_presets_demo-X.Y.Z-py3-none-any.whl`
-- Python sdist: `project_presets_demo-X.Y.Z.tar.gz`
-- `SHA256SUMS`
-
-[GitHub Actions](https://github.com/omitsuhashi/project-presets-demo/actions/workflows/release.yml) でタグの実行が成功し、Release が公開されたことを確認します。公開した配布物をダウンロードして checksum と導入を確認します。
+[GitHub Actions](https://github.com/omitsuhashi/project-presets-demo/actions/workflows/release.yml) の成功と Release の公開を確認します。
 
 ```sh
-gh release view "v${PRESET_RELEASE}" --repo omitsuhashi/project-presets-demo
-PRESET_ARTIFACTS="/tmp/project-presets-${PRESET_RELEASE}"
-gh release download "v${PRESET_RELEASE}" --repo omitsuhashi/project-presets-demo --dir "$PRESET_ARTIFACTS"
+gh release view "$PRESET_TAG" --repo omitsuhashi/project-presets-demo
+PRESET_ARTIFACTS="/tmp/project-presets-${PRESET_TAG}"
+gh release download "$PRESET_TAG" --repo omitsuhashi/project-presets-demo --dir "$PRESET_ARTIFACTS"
 (cd "$PRESET_ARTIFACTS" && shasum -a 256 -c SHA256SUMS)
 ```
 
-[導入手順](install.md) の配布版をこの版に置き換え、TypeScript と Python の`npx` / `uvx` の一時実行からの新規導入・`--setup`・`--check`・アプリテストを行います。旧版を導入した案件でも [更新手順](update.md) を試します。Release notes は該当する changelog の変更・互換性・移行方法を記載します。必要なら、その本文をファイルに保存して `gh release edit "v${PRESET_RELEASE}" --notes-file /path/to/release-notes.md` で反映します。
+対象言語の `npx` / `uvx` で新規導入・更新・`--check`・アプリテストを行います。TypeScript の URL は `releases/download/typescript-vX.Y.Z/project-presets-demo-X.Y.Z.tgz`、Python は `releases/download/python-vX.Y.Z/project_presets_demo-X.Y.Z-py3-none-any.whl` です。
 
-旧 Git 配布を保守する `release/v1` は、公開が成功した v1 系 commit だけに進めます。
-
-```sh
-# v1 系の公開が成功した後に実行する。v2 以降には使用しない。
-git push origin "v${PRESET_RELEASE}:refs/heads/release/v1"
-```
+Release の全体の latest 表示は更新選択に使いません。利用側は対象言語のタグと配布物から同じ major の最新 stable 版を選びます。旧 `release/v1` はこの言語別タグで進めません。
 
 ## 公開に失敗した時
 

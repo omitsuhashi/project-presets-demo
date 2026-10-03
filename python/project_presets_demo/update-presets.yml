@@ -22,8 +22,9 @@ concurrency:
 
 jobs:
   update:
-    uses: omitsuhashi/project-presets-demo/.github/workflows/update-consumer.yml@v2.1.0
+    uses: omitsuhashi/project-presets-demo/.github/workflows/update-consumer.yml@PRESET_TAG
     with:
+      provider-ref: PRESET_TAG
       version: ${{ inputs.version || '' }}
       # For Python applications, set actual tests here, for example:
       # test-command: uv run --locked python -m unittest discover

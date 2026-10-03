@@ -10,6 +10,8 @@ import { parseArgs } from 'node:util';
 const root = fileURLToPath(new URL('../', import.meta.url));
 const catalog = JSON.parse(readFileSync(join(root, 'profiles.json'), 'utf8'));
 const { version: release, dependencies } = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
+const [major, minor] = release.split('.').map(Number);
+const tag = `${major > 2 || (major === 2 && minor >= 2) ? 'typescript-' : ''}v${release}`;
 const packageManager = `pnpm@${dependencies.pnpm}`;
 const { values: options, positionals } = parseArgs({
   options: {
@@ -76,19 +78,19 @@ if (profile.language === 'python') {
   }
   assert(!Object.hasOwn(manifest.dependencies, 'project-presets-demo'), 'The preset package must be a devDependency');
   const base = 'https://github.com/omitsuhashi/project-presets-demo/releases/download/';
-  const artifact = `${base}v${release}/project-presets-demo-${release}.tgz`;
+  const artifact = `${base}${tag}/project-presets-demo-${release}.tgz`;
   const previousSource = manifest.devDependencies['project-presets-demo'];
   assert(previousSource === undefined || typeof previousSource === 'string', 'Invalid preset dependency');
   const source = options.source ?? (previousSource === undefined || previousSource.startsWith(base) ? artifact : previousSource);
   // Official releases follow the executing CLI; custom sources remain explicit.
   manifest.devDependencies['project-presets-demo'] = source.startsWith('git+')
-    ? `${source.split('#')[0]}#v${release}`
+    ? `${source.split('#')[0]}#${tag}`
     : /^(https?:|file:)/.test(source) ? source : release;
   const state = { profile: id, release, packageManager, dependencies: profile.dependencies, devDependencies: profile.devDependencies };
   // ponytail: one standalone project root; shared repository workflows need explicit directory inputs.
   const workflow = '.github/workflows/update-presets.yml';
   const updateWorkflow = readFileSync(join(root, 'python/project_presets_demo/update-presets.yml'), 'utf8')
-    .replace(/(update-consumer\.yml@v)\d+\.\d+\.\d+/, (_, prefix) => prefix + release);
+    .replaceAll('PRESET_TAG', tag);
   const writes = {
     'package.json': JSON.stringify(manifest, null, 2) + '\n',
     [marker]: JSON.stringify(state, null, 2) + '\n',

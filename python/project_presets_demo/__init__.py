@@ -62,9 +62,10 @@ def apply(args):
     if "project" not in manifest:
         raise ValueError("pyproject.toml must define [project]; add project metadata before applying the preset")
     release = metadata.version("project-presets-demo")
+    tag = ("python-" if tuple(map(int, release.split("."))) >= (2, 2, 0) else "") + f"v{release}"
     ruff = next(item.removeprefix("ruff==") for item in metadata.requires("project-presets-demo") if item.startswith("ruff=="))
     base = "https://github.com/omitsuhashi/project-presets-demo/releases/download/"
-    artifact = args.source or f"{base}v{release}/project_presets_demo-{release}-py3-none-any.whl"
+    artifact = args.source or f"{base}{tag}/project_presets_demo-{release}-py3-none-any.whl"
     dev = manifest.get("dependency-groups", {}).get("dev", [])
     has_preset = any(isinstance(item, str) and re.split(r"[^a-z0-9_-]", item.lower().strip(), maxsplit=1)[0].replace("_", "-") == "project-presets-demo" for item in dev)
     preset_source = manifest.get("tool", {}).get("uv", {}).get("sources", {}).get("project-presets-demo", {})
@@ -121,7 +122,7 @@ def apply(args):
     workflow = target / ".github/workflows/update-presets.yml"
     if not workflow.exists():
         template = (Path(__file__).parent / "update-presets.yml").read_text()
-        writes[workflow] = re.sub(r"(update-consumer\.yml@v)\d+\.\d+\.\d+", lambda match: match[1] + release, template).encode()
+        writes[workflow] = template.replace("PRESET_TAG", tag).encode()
     state = {"profile": args.profile, "release": release, "files": hashes, "devDependencies": {"ruff": ruff}}
     if dependencies:
         state["dependencies"] = dependencies

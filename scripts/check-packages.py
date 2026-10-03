@@ -5,6 +5,7 @@ import os
 import shutil
 import subprocess
 import sys
+import tarfile
 import tempfile
 import textwrap
 import threading
@@ -62,8 +63,7 @@ def framework_check(consumer, kind, cli):
 
 manifest = json.loads((ROOT / "package.json").read_text())
 python = tomllib.loads((ROOT / "pyproject.toml").read_text())
-catalog = json.loads((ROOT / "profiles.json").read_text())
-assert manifest["version"] == python["project"]["version"]
+catalog = json.loads((ROOT / "profiles.json").read_text()) | json.loads((ROOT / "python/profiles.json").read_text())
 assert manifest["packageManager"] == "pnpm@" + manifest["dependencies"]["pnpm"]
 assert python["project"]["dependencies"] == ["ruff==" + catalog["python-scripts"]["devDependencies"]["ruff"]]
 current_ruff = catalog["python-scripts"]["devDependencies"]["ruff"]
@@ -107,7 +107,8 @@ with tempfile.TemporaryDirectory(prefix="project-presets-packages-") as director
                 selected = old_frameworks[name] if release == "1.0.0" else pin
                 text = text.replace(dependency, f"{name}=={selected}")
                 catalog[f"python-{kind}"]["dependencies"][name] = selected
-        (provider / "profiles.json").write_text(json.dumps(catalog))
+        (provider / "profiles.json").write_text(json.dumps({name: profile for name, profile in catalog.items() if profile["language"] == "typescript"}))
+        (provider / "python/profiles.json").write_text(json.dumps({name: profile for name, profile in catalog.items() if profile["language"] == "python"}))
         (provider / "pyproject.toml").write_text(text)
         if release == "2.0.0":
             with (provider / "python/project_presets_demo/config/base.toml").open("a") as file:
@@ -187,7 +188,8 @@ with tempfile.TemporaryDirectory(prefix="project-presets-packages-") as director
     git(legacy, "restore", ".")
     (legacy / "pnpm-lock.yaml").unlink()
     updater = [sys.executable, str(ROOT / "scripts/update-consumer.py"), "--artifacts", str(artifacts)]
-    run(legacy, *updater, "--version", "1.5.0", expected=1)
+    assert "no update needed" in run(legacy, *updater, "--version", "1.5.0")
+    assert (legacy / "package-lock.json").read_bytes() == old_lock
     run(legacy, *updater, "--version", "2.0.0")
     migrated = json.loads((legacy / "package.json").read_text())
     assert migrated["packageManager"] == manifest["packageManager"]
@@ -395,3 +397,31 @@ keep = "application-owned"
         assert json.loads((consumer / ".project-preset.json").read_text()) == state
         assert git(consumer, "status", "--porcelain") == ""
         print(f"PASS: {profile} rules, runtime without dev tools, framework update, overrides, drift rejection and revert")
+
+    # Build and bootstrap unequal language versions using the new tag scheme.
+    manifest["version"] = "2.2.0"
+    (provider / "package.json").write_text(json.dumps(manifest))
+    text = (provider / "pyproject.toml").read_text().replace('version = "2.0.0"', 'version = "2.3.0"')
+    (provider / "pyproject.toml").write_text(text)
+    pnpm(provider, "pack", "--config.ignore-scripts=true", "--pack-destination", str(artifacts))
+    run(provider, "uv", "build", "--out-dir", str(artifacts))
+    with tarfile.open(artifacts / "project-presets-demo-2.2.0.tgz") as archive:
+        names = archive.getnames()
+        assert not any(name.startswith("package/python/") and name != "package/python/project_presets_demo/update-presets.yml" for name in names)
+        assert set(json.load(archive.extractfile("package/profiles.json"))) == {name for name in catalog if name.startswith("typescript-")}
+    for language, release in [("typescript", "2.2.0"), ("python", "2.3.0")]:
+        consumer = temp / f"independent-{language}"
+        profile = f"{language}-" + ("node" if language == "typescript" else "scripts")
+        filename = (f"project-presets-demo-{release}.tgz" if language == "typescript"
+                    else f"project_presets_demo-{release}-py3-none-any.whl")
+        source = remote + "/" + filename if language == "typescript" else (artifacts / filename).as_uri()
+        entry = (["npx", "--yes", "--allow-remote=root", "--ignore-scripts", source, profile]
+                 if language == "typescript" else ["uvx", "--python", "3.12", "--from", source, "project-presets-python", profile])
+        preview = json.loads(run(temp, *entry, str(consumer)))
+        assert preview["source"] == f"https://github.com/omitsuhashi/project-presets-demo/releases/download/{language}-v{release}/{filename}"
+        run(temp, *entry, str(consumer), "--setup", "--source", source)
+        run(temp, *entry, str(consumer), "--check", "--source", source)
+        automation = (consumer / ".github/workflows/update-presets.yml").read_text()
+        assert f"update-consumer.yml@{language}-v{release}" in automation
+        assert f"provider-ref: {language}-v{release}" in automation
+    print("PASS: unequal TypeScript/Python versions build, install and pin their own release URLs/workflows")

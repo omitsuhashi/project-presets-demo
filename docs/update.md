@@ -20,10 +20,10 @@ marker に現在の Profile / 配布版が記録されています。未 commit 
 | 選び方 | 動作 |
 | --- | --- |
 | `--version 2.1.0` など明示 | 指定した公開版を選ぶ。major 更新は明示指定。TypeScript 1.x の適用には v1.5.0 の更新 script を使う |
-| `--version` を省略 | 現在と同じ major で、現在以上の最新 stable Release を選ぶ |
+| `--version` を省略 | 対象言語の配布物がある、現在と同じ major の最新 stable Release を選ぶ |
 | Profile の変更 | アプリの移行が必要。通常の更新 CLI は停止する |
 
-自動選択は draft / prerelease を採用しません。現在と最新版が同じでも再導入・再検証し、ファイル差分がなければ自動 PR は作られません。
+2.2.0 以降の更新 script は draft / prerelease・別言語・配布物が欠けた Release を採用しません。導入済みと同じ版なら、ファイル変更・再導入・PR 作成を行わず終了します。日常の CI 検証は案件側の workflow で行います。明示指定は `--version 2.2.0` と対象言語のタグ（例: `--version python-v2.2.0`）を使えます。
 
 ## 2. 手動で更新 PR を作る
 
@@ -221,3 +221,28 @@ git restore --source=HEAD -- pyproject.toml uv.lock .project-preset.json .projec
 マージ後は更新 commit を revert する PR を作ります。merge commit の場合は Git の通常の merge revert 手順を使います。元の manifest・lock・marker・管理設定を揃えて戻し、依存を再導入して `--check` とアプリテストを実行します。Git の revert は DB migration やデータを復旧しないため、そちらは案件の復旧手順を使います。
 
 通常の一つの更新 commit なら、対象の SHA を確認して `PRESET_UPDATE_COMMIT` に設定した後、`git revert "$PRESET_UPDATE_COMMIT"` を使います。revert の変更も PR で検証・レビューします。
+
+## 言語別リリースへの移行
+
+2.2.0 はこの変更で準備する未公開版です。TypeScript の `typescript-v2.2.0`、Python の `python-v2.2.0` がそれぞれ公開された後に実行します。以後、別言語の Release では対象案件の版を上げません。`v2.1.0` 以前の統合配布も新しい updater で引き続き適用できます。
+
+既存の `update-consumer.yml@v2.1.0` は古い updater を使い、言語別タグを検索しません。`--setup` は案件所有の workflow を保持するため、`.github/workflows/update-presets.yml` の以下の部分を手動で移行して commit します。schedule・directory・アプリテストは案件の設定を保持します。
+
+```yaml
+jobs:
+  update:
+    # Python では uses と provider-ref の両方を python-v2.2.0 にする。
+    uses: omitsuhashi/project-presets-demo/.github/workflows/update-consumer.yml@typescript-v2.2.0
+    with:
+      provider-ref: typescript-v2.2.0
+      version: ${{ inputs.version || '' }}
+```
+
+手動で更新 script を使う場合も checkout を対象言語の公開タグへ更新します。裸の版番号は 2.2.0 以降の言語別タグに解決されます。major 更新と downgrade は版を明示した時だけ行います。
+
+```sh
+# Python の例。TypeScript は typescript-v2.2.0 にする。
+git -C ../preset-provider fetch origin tag python-v2.2.0
+git -C ../preset-provider switch --detach python-v2.2.0
+uv run --no-project --python 3.12 python ../preset-provider/scripts/update-consumer.py --directory .
+```

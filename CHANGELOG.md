@@ -1,5 +1,14 @@
 # Changelog
 
+## TypeScript 2.2.0 / Python 2.2.0（未公開）
+
+- TypeScript と Python の版管理を分離。`typescript-vX.Y.Z` は npm tarball、`python-vX.Y.Z` は wheel / sdist を公開し、変更した言語だけ版を上げる。
+- npm に Python の設定・CLI・catalog を同梱しない。更新 workflow の共通テンプレートだけを両パッケージに含める。
+- 更新処理は言語・配布物・stable / major を確認し、導入済みと同じ版なら再導入や PR 作成を行わない。既存の統合タグは引き続き選択可能。
+- 初回 setup は言語別タグへ workflow と updater checkout を固定する。既存 workflow は保持するため、参照タグと `provider-ref` の明示的な移行が必要。
+
+Profile の依存版・lint ルールは 2.1.0 と同じ。
+
 ## 2.1.0
 
 - TypeScript / Python の bootstrap に `.github/workflows/update-presets.yml` の配置を追加。npm tarball と Python wheel に同じ workflow を含め、`npx` / `uvx` の `--setup` 一回で更新 PR の下地も作る。
