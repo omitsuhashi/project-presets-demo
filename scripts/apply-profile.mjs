@@ -1,14 +1,16 @@
 #!/usr/bin/env node
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import { basename, resolve, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const catalog = JSON.parse(readFileSync(join(root, 'profiles.json'), 'utf8'));
-const release = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).version;
+const { version: release, dependencies } = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
+const packageManager = `pnpm@${dependencies.pnpm}`;
 const { values: options, positionals } = parseArgs({
   options: {
     setup: { type: 'boolean' }, write: { type: 'boolean' }, check: { type: 'boolean' },
@@ -41,6 +43,13 @@ if (profile.language === 'python') {
     ? { name, version: '0.0.0', private: true, type: 'module' }
     : JSON.parse(readFileSync(path('package.json'), 'utf8'));
   assert(manifest && typeof manifest === 'object' && !Array.isArray(manifest), 'package.json must contain a JSON object');
+  const previousManager = manifest.packageManager;
+  assert(!previousManager || /^(npm|pnpm)@/.test(previousManager), 'Migrate the existing package manager to pnpm before adopting');
+  assert(!previous?.packageManager || previousManager === previous.packageManager || previousManager === packageManager, 'packageManager was changed locally; restore before updating');
+  manifest.packageManager = packageManager;
+  const pnpm = (...args) => execFileSync(process.execPath, [resolve(createRequire(import.meta.url).resolve('pnpm'), '../bin/pnpm.mjs'), ...args, '--ignore-workspace'], {
+    cwd: target, stdio: 'inherit', env: { ...process.env, CI: 'true', pnpm_config_ignore_scripts: 'true' },
+  });
   assert(!previous || previous.profile === id, 'Changing frameworks requires an application migration; use a separate project');
   const files = {
     'eslint.config.mjs': `import preset from 'project-presets-demo/${profile.eslint}';\n\nexport default preset;\n`,
@@ -75,24 +84,26 @@ if (profile.language === 'python') {
   manifest.devDependencies['project-presets-demo'] = source.startsWith('git+')
     ? `${source.split('#')[0]}#v${release}`
     : /^(https?:|file:)/.test(source) ? source : release;
-  const state = { profile: id, release, dependencies: profile.dependencies, devDependencies: profile.devDependencies };
+  const state = { profile: id, release, packageManager, dependencies: profile.dependencies, devDependencies: profile.devDependencies };
   const writes = {
     'package.json': JSON.stringify(manifest, null, 2) + '\n',
     [marker]: JSON.stringify(state, null, 2) + '\n',
     ...Object.fromEntries(Object.entries(files).filter(([name]) => !existsSync(path(name)))),
   };
-  console.log(JSON.stringify({ profile: id, release, source: manifest.devDependencies['project-presets-demo'], changes, create: Object.keys(writes).filter((name) => !existsSync(path(name))) }, null, 2));
+  console.log(JSON.stringify({ profile: id, release, packageManager, source: manifest.devDependencies['project-presets-demo'], changes, create: Object.keys(writes).filter((name) => !existsSync(path(name))) }, null, 2));
   if (options.check) {
+    assert(previousManager === packageManager && previous?.packageManager === packageManager, 'Apply the pinned pnpm version before merging');
     assert(manifest.devDependencies['project-presets-demo'] === previousSource, 'Pin the manifest to the executing preset release');
-    assert(previous?.release === release && changes.length === 0 && Object.keys(files).every((name) => existsSync(path(name))), 'Apply this preset release and regenerate the npm lock before merging');
-    const lock = JSON.parse(readFileSync(path('package-lock.json'), 'utf8'));
+    assert(previous?.release === release && changes.length === 0 && Object.keys(files).every((name) => existsSync(path(name))), 'Apply this preset release and regenerate the pnpm lock before merging');
+    assert(existsSync(path('pnpm-lock.yaml')), 'Run --setup to generate pnpm-lock.yaml');
+    assert(!existsSync(path('package-lock.json')) && !existsSync(path('npm-shrinkwrap.json')), 'Complete migration to pnpm before merging');
+    pnpm('install', '--lockfile-only', '--frozen-lockfile', '--ignore-scripts');
     for (const field of ['dependencies', 'devDependencies']) {
       for (const [name, version] of Object.entries(profile[field])) {
-        assert(lock.packages[''][field]?.[name] === version && lock.packages[`node_modules/${name}`]?.version === version, `Regenerate the npm lock for ${name}`);
+        assert(JSON.parse(readFileSync(path(`node_modules/${name}/package.json`), 'utf8')).version === version, `Sync ${name} with the pnpm lock`);
       }
     }
-    assert(lock.packages['node_modules/project-presets-demo']?.version === release, 'The npm lock has a different preset release');
-    assert(lock.packages[''].devDependencies?.['project-presets-demo'] === source, 'The npm lock and manifest use different preset sources');
+    assert(JSON.parse(readFileSync(path('node_modules/project-presets-demo/package.json'), 'utf8')).version === release, 'The installed preset has a different release');
   }
   if (write) {
     // Validate and stage every file before replacing any destination.
@@ -110,13 +121,12 @@ if (profile.language === 'python') {
       throw new Error(`Preset write failed; inspect .preset-${process.pid} files before retrying`, { cause: error });
     }
     if (sync) {
-      const flags = ['--ignore-scripts', '--no-audit', '--no-fund'];
-      if (source.startsWith('git+')) flags.push('--allow-git=root');
-      if (/^https?:/.test(source)) flags.push('--allow-remote=root');
-      execFileSync('npm', ['install', '--package-lock-only', ...flags], { cwd: target, stdio: 'inherit' });
-      execFileSync('npm', ['ci', ...flags], { cwd: target, stdio: 'inherit' });
-      const lock = JSON.parse(readFileSync(path('package-lock.json'), 'utf8'));
-      assert(lock.packages['node_modules/project-presets-demo']?.version === release, 'The source must contain the executing preset release');
+      const legacyLocks = ['package-lock.json', 'npm-shrinkwrap.json'].filter((name) => existsSync(path(name)));
+      if (legacyLocks.length && !existsSync(path('pnpm-lock.yaml'))) pnpm('import');
+      pnpm('install', '--lockfile-only', '--no-frozen-lockfile', '--ignore-scripts');
+      pnpm('install', '--frozen-lockfile', '--ignore-scripts');
+      assert(JSON.parse(readFileSync(path('node_modules/project-presets-demo/package.json'), 'utf8')).version === release, 'The source must contain the executing preset release');
+      for (const name of legacyLocks) unlinkSync(path(name));
     }
   }
 }

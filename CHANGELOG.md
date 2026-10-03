@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.0.0
+
+- TypeScript の導入・更新・整合チェックを pnpm 11.28.0 に統一。pnpm を配布パッケージの依存に含め、事前導入なしの `npx ... --setup` から固定版を使用。利用側の `packageManager` / `pnpm-lock.yaml` を管理する。
+- npm lock は pnpm import で移行し、frozen install と配布版確認の成功後に削除。アプリ独自の依存・scripts・設定を保持し、失敗時には元の npm lock を残す。
+- 配布側の CI・pack と利用側の更新 PR / lint / 型チェック / build / test も pnpm で実行。npm lock の削除も更新 PR に含める。
+- 1.x からの移行は 2.0.0 の CLI または更新 script に版を明示し、CI コマンドも pnpm へ変更する。自動検索は従来どおり同じ major を追う。移行の revert は復元した npm lock で npm ci を行う。
+- CLI は Node.js 22.13 以上（22 系または 24 以降）。Profile の依存版・lint ルールと Python の uv 処理は 1.5.0 と同じ。Python の配布版番号も 2.0.0 に揃える。
+
 ## 1.5.0
 
 - TypeScript / Python の初回導入で `package.json` / `pyproject.toml` がなければ自動作成。事前の `npm init` / `uv init` が不要になり、空ディレクトリから `npx` / `uvx` の `--setup` 一回で依存・設定・native lock を揃える。

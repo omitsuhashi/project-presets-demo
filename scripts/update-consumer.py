@@ -2,6 +2,7 @@
 
 import argparse
 import json
+import os
 import re
 import subprocess
 from pathlib import Path
@@ -40,21 +41,23 @@ def main():
     artifacts = args.artifacts.resolve() if args.artifacts else None
 
     def run(*command):
-        subprocess.run(command, cwd=target, check=True)
+        subprocess.run(command, cwd=target, check=True, env={**os.environ, "CI": "true", "pnpm_config_ignore_scripts": "true"})
 
     profile = state["profile"]
     if profile in {"typescript-node", "typescript-hono", "typescript-next"}:
+        if version(selected)[0] < 2:
+            raise ValueError("Use the v1.5.0 updater for TypeScript 1.x; migrate with --version 2.0.0, or revert the migration PR")
         filename = f"project-presets-demo-{selected}.tgz"
-        source = str(artifacts / filename) if artifacts else f"{base}/{filename}"
-        flags = ["--ignore-scripts", "--allow-git=root", "--allow-remote=root", "--no-audit", "--no-fund"]
-        run("npm", "install", "--package-lock-only", "--save-dev", "--save-exact", source, *flags)
-        run("npm", "ci", *flags)
-        run("node", "node_modules/project-presets-demo/scripts/apply-profile.mjs", profile, "--write", "--sync")
+        source = (artifacts / filename).as_uri() if artifacts else f"{base}/{filename}"
+        run("npx", "--yes", "--ignore-scripts", "--allow-remote=root", "--package", source, "--", "project-presets", profile, "--setup", "--source", source)
         run("node", "node_modules/project-presets-demo/scripts/apply-profile.mjs", profile, "--check")
-        run("npm", "exec", "--", "eslint", ".")
-        run("npm", "exec", "--", "tsc", "--noEmit")
-        run("npm", "run", "build", "--if-present")
-        run("npm", "run", "test", "--if-present")
+        manager = subprocess.check_output([
+            "node", "-p", "require('node:path').resolve(require('node:module').createRequire(require('node:fs').realpathSync('node_modules/project-presets-demo/scripts/apply-profile.mjs')).resolve('pnpm'), '../bin/pnpm.mjs')",
+        ], cwd=target, text=True).strip()
+        run("node", manager, "--ignore-workspace", "exec", "eslint", ".")
+        run("node", manager, "--ignore-workspace", "exec", "tsc", "--noEmit")
+        run("node", manager, "--ignore-workspace", "run", "--if-present", "build")
+        run("node", manager, "--ignore-workspace", "run", "--if-present", "test")
     elif profile in {"python-scripts", "python-django", "python-fastapi"}:
         filename = f"project_presets_demo-{selected}-py3-none-any.whl"
         source = (artifacts / filename).as_uri() if artifacts else f"{base}/{filename}"

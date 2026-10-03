@@ -11,12 +11,13 @@ const provider = join(temp, 'provider');
 const ts = join(temp, 'typescript-consumer');
 const py = join(temp, 'python-consumer');
 const run = (cwd, command, args, expected = 0) => {
-  const result = spawnSync(command, args, { cwd, encoding: 'utf8', env: { ...process.env, NEXT_TELEMETRY_DISABLED: '1' } });
+  const result = spawnSync(command, args, { cwd, encoding: 'utf8', env: { ...process.env, CI: 'true', NEXT_TELEMETRY_DISABLED: '1' } });
   assert.ifError(result.error);
   assert.equal(result.status, expected, `${command} ${args.join(' ')}\n${result.stdout}\n${result.stderr}`);
   return result.stdout;
 };
 const git = (cwd, ...args) => run(cwd, 'git', args).trim();
+const pnpm = (cwd, ...args) => run(cwd, process.execPath, [join(root, 'node_modules/pnpm/bin/pnpm.mjs'), '--ignore-workspace', ...args]);
 const init = (cwd) => {
   mkdirSync(cwd, { recursive: true });
   git(cwd, 'init', '-b', 'main');
@@ -29,19 +30,8 @@ const commit = (cwd, message) => {
   return git(cwd, 'rev-parse', 'HEAD');
 };
 const install = (version) => {
-  const manifest = JSON.parse(readFileSync(join(ts, 'package.json'), 'utf8'));
-  manifest.devDependencies = {
-    ...manifest.devDependencies,
-    'project-presets-demo': `git+file://${provider}#${version}`,
-  };
-  writeFileSync(join(ts, 'package.json'), JSON.stringify(manifest, null, 2) + '\n');
-  run(ts, 'npm', ['install', '--package-lock-only', '--allow-git=root', '--ignore-scripts', '--no-audit', '--no-fund']);
-  run(ts, 'npm', ['ci', '--allow-git=root', '--ignore-scripts', '--no-audit', '--no-fund']);
-  run(ts, 'node', ['node_modules/project-presets-demo/scripts/apply-profile.mjs', 'typescript-node', '--check'], 1);
-  run(ts, 'node', ['node_modules/project-presets-demo/scripts/apply-profile.mjs', 'typescript-node', '--write']);
-  run(ts, 'node', ['node_modules/project-presets-demo/scripts/apply-profile.mjs', 'typescript-node', '--check'], 1);
-  run(ts, 'npm', ['install', '--package-lock-only', '--allow-git=root', '--ignore-scripts', '--no-audit', '--no-fund']);
-  run(ts, 'npm', ['ci', '--allow-git=root', '--ignore-scripts', '--no-audit', '--no-fund']);
+  const source = `git+file://${provider}#${version}`;
+  run(ts, 'npx', ['--yes', '--allow-git=root', '--ignore-scripts', source, 'typescript-node', '--setup', '--source', source]);
   run(ts, 'node', ['node_modules/project-presets-demo/scripts/apply-profile.mjs', 'typescript-node', '--check']);
 };
 const lintTs = (expected = 0) => JSON.parse(run(ts, join(ts, 'node_modules/.bin/eslint'), [
@@ -99,7 +89,7 @@ try {
 export default [...node, { files: ['**/*.ts'], rules: { '@typescript-eslint/no-explicit-any': 'off' } }];\n`);
   writeFileSync(join(ts, 'main.ts'), "const message: any = 'consumer override survives';\nconsole.log(message);\n");
   const oldManifest = readFileSync(join(ts, 'package.json'));
-  const oldLock = readFileSync(join(ts, 'package-lock.json'));
+  const oldLock = readFileSync(join(ts, 'pnpm-lock.yaml'));
   const oldState = readFileSync(join(ts, '.project-preset.json'));
   const originalSource = readFileSync(join(ts, 'main.ts'));
   const originalTsconfig = readFileSync(join(ts, 'tsconfig.json'));
@@ -146,7 +136,7 @@ ignore = ["F401"]\n`);
     writeFileSync(join(consumer, 'package.json'), '{"name":"framework-consumer","private":true,"type":"module","scripts":{"custom":"keep"}}\n');
     const source = `git+file://${provider}#v1.0.0`;
     run(consumer, 'npx', ['--yes', '--allow-git=root', '--ignore-scripts', source, id, '--setup', '--source', source]);
-    run(consumer, 'npm', ['exec', '--', 'project-presets', id, '--check']);
+    pnpm(consumer, 'exec', 'project-presets', id, '--check');
     const applied = JSON.parse(readFileSync(join(consumer, 'package.json')));
     assert.deepEqual(applied.dependencies, catalog[id].dependencies);
     for (const [name, version] of Object.entries(catalog[id].devDependencies)) assert.equal(applied.devDependencies[name], version);
@@ -196,9 +186,9 @@ ignore = ["F401"]\n`);
   console.log('PASS: central v2.0.0 updates managed dependency versions and lint together; consumer code and overrides survive');
 
   writeFileSync(join(ts, 'package.json'), oldManifest);
-  writeFileSync(join(ts, 'package-lock.json'), oldLock);
+  writeFileSync(join(ts, 'pnpm-lock.yaml'), oldLock);
   writeFileSync(join(ts, '.project-preset.json'), oldState);
-  run(ts, 'npm', ['ci', '--offline', '--allow-git=root', '--ignore-scripts', '--no-audit', '--no-fund']);
+  pnpm(ts, 'install', '--frozen-lockfile', '--offline', '--ignore-scripts');
   git(py, 'revert', '--no-edit', updateCommit);
   git(py, '-c', 'protocol.file.allow=always', 'submodule', 'update', '--init', '--recursive');
   assert.equal(git(join(py, '.lint-presets'), 'rev-parse', 'HEAD'), oldSha);
@@ -206,7 +196,7 @@ ignore = ["F401"]\n`);
   assert.deepEqual(uvLint(), []);
   assert.equal(run(py, 'uv', ['run', '--locked', 'ruff', '--version']).trim(), 'ruff 0.16.9');
   assert.equal(JSON.parse(readFileSync(join(ts, 'package.json'))).devDependencies['@types/node'], '24.19.0');
-  console.log('PASS: restoring the npm lock/state and reverting the submodule pin rolls dependencies and configuration back');
+  console.log('PASS: restoring the pnpm lock/state and reverting the submodule pin rolls dependencies and configuration back');
 } finally {
   rmSync(temp, { recursive: true, force: true });
 }

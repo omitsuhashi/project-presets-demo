@@ -2,7 +2,7 @@
 
 利用側の担当者が、Profile を一つ選び、固定した配布版と設定・lockfile を Git に保存するための手順です。初回導入後の更新は [利用側の更新・復旧](update.md) を使います。
 
-この手順は公開済みの `v1.5.0` を使います。TypeScript は Node.js 24 / npm 12、Python は Python 3.12 / uv 0.11.7 で検証しています。npm・PyPI のアカウント、GitHub 認証、Git submodule は初回導入には不要です。ツールの導入は [Node.js](https://nodejs.org/en/download) / [uv](https://docs.astral.sh/uv/getting-started/installation/) を参照してください。
+この手順は公開済みの `v2.0.0` を使います。TypeScript の CLI は Node.js 22.13 以上（22 系または 24 以降）/ npm を前提とし、Node.js 24 / npm 12 と Node.js 22.22.2 で検証しています。Python は Python 3.12 / uv 0.11.7 で検証しています。npm・PyPI のアカウント、GitHub 認証、Git submodule は初回導入には不要です。ツールの導入は [Node.js](https://nodejs.org/en/download) / [uv](https://docs.astral.sh/uv/getting-started/installation/) を参照してください。
 
 **事前の `npm init` / `uv init` / `npm install` / `uv add` は不要です。** `npx` / `uvx` が固定版の CLI を一時取得し、`--setup` が manifest・設定・依存・lockfile を一括適用します。繰り返し実行でき、案件固有の設定を保持します。書き込み前に確認したい場合は `--setup` を外すと preview、適用後の確認は `--check` です。従来の `--write --sync` も同じ処理として利用できます。
 
@@ -20,30 +20,33 @@ Node.js / npm または Python / uv が前提です。初回の `package.json` /
 mkdir typescript-demo
 cd typescript-demo
 
-PRESET_VERSION=1.5.0
+# pnpm 未導入でも、このターミナル内で固定版を一時実行できる。
+pnpm() { npx --yes --ignore-scripts --package=pnpm@11.28.0 -- pnpm "$@"; }
+
+PRESET_VERSION=2.0.0
 # 初回に一つ選ぶ。node / hono / next はそれぞれ別の構成。
 PRESET_PROFILE=typescript-node
 npx --yes --allow-remote=root --ignore-scripts \
   "https://github.com/omitsuhashi/project-presets-demo/releases/download/v${PRESET_VERSION}/project-presets-demo-${PRESET_VERSION}.tgz" \
   "$PRESET_PROFILE" --setup
-npm exec -- project-presets "$PRESET_PROFILE" --check
+pnpm exec project-presets "$PRESET_PROFILE" --check
 ```
 
-`PRESET_PROFILE` は `typescript-node`、`typescript-hono`、`typescript-next` から選びます。`--setup` が `eslint.config.mjs` / `tsconfig.json` / `.project-preset.json` を作り、Profile の exact version を `package.json` に登録して npm lock とインストール済み依存を揃えます。**ESLint・TypeScript・型定義やフレームワークを個別にインストールする必要はありません。** CLI が実行版と同じ公開 tarball を開発用依存に登録します。共通設定の import / extends が使うパッケージと、ESLint・TypeScript も自動で導入されます。Hono・Next.js・React は実行用依存、preset・lint・型定義は開発用依存です。
+`PRESET_PROFILE` は `typescript-node`、`typescript-hono`、`typescript-next` から選びます。`--setup` が `eslint.config.mjs` / `tsconfig.json` / `.project-preset.json` を作り、Profile の exact version と `packageManager: pnpm@11.28.0` を `package.json` に登録し、配布パッケージの pnpm で `pnpm-lock.yaml` とインストール済み依存を揃えます。pnpm の事前導入は不要です。上記のシェル関数は、導入後のアプリ操作を同じ固定版で行うための補助です。**ESLint・TypeScript・型定義やフレームワークを個別にインストールする必要はありません。** CLI が実行版と同じ公開 tarball を開発用依存に登録します。共通設定の import / extends が使うパッケージと、ESLint・TypeScript も自動で導入されます。Hono・Next.js・React は実行用依存、preset・lint・型定義は開発用依存です。
 
 アプリのコード・起動 scripts は案件側で用意します。Node.js の最小確認は次のとおりです。
 
 ```sh
 printf 'const greeting: string = "Hello";\nconsole.log(greeting);\n' > main.ts
-npm exec -- eslint .
-npm exec -- tsc --noEmit
+pnpm exec eslint .
+pnpm exec tsc --noEmit
 node main.ts
 ```
 
-Hono は [app.ts / server.ts](../examples/hono) を配置し、`node server.ts` で起動できます。Next.js は [app/](../examples/next/app) を配置し、`npm exec -- next dev` で起動します。更新時に build / test を実行するため、Next.js の例では次も設定します。
+Hono は [app.ts / server.ts](../examples/hono) を配置し、`node server.ts` で起動できます。Next.js は [app/](../examples/next/app) を配置し、`pnpm exec next dev` で起動します。更新時に build / test を実行するため、Next.js の例では次も設定します。
 
 ```sh
-npm pkg set 'scripts.dev=next dev' 'scripts.build=next build --webpack'
+node --input-type=module -e 'import fs from "node:fs"; const p=JSON.parse(fs.readFileSync("package.json")); p.scripts={...p.scripts,dev:"next dev",build:"next build --webpack"}; fs.writeFileSync("package.json",JSON.stringify(p,null,2)+"\n");'
 ```
 
 初回に作った共通設定の参照は残し、案件固有のルールを追加できます。
@@ -58,12 +61,14 @@ export default [...preset, { rules: { '@typescript-eslint/no-unused-vars': 'warn
 検証後、既存 Git repository または `git init` した repository に次を commit します。
 
 ```sh
-git add package.json package-lock.json eslint.config.mjs tsconfig.json .project-preset.json
+git add package.json pnpm-lock.yaml eslint.config.mjs tsconfig.json .project-preset.json
 # 作成したアプリのコードと .gitignore も別途追加する。
 git commit -m "Adopt TypeScript project preset"
 ```
 
 `node_modules/`、`.next/`、`*.tsbuildinfo` は `.gitignore` に入れます。install script は実行していません。アプリの依存で必要な script は案件側で判断して実行します。
+
+npm の既存 lock は pnpm 自身の `import` で移行し、依存導入と配布版確認が成功した後に削除します。pnpm の依存解決・配置に変わるため、[CI・復旧を含む移行手順](update.md#npm-の-1x-から-pnpm-へ移行する) に従ってアプリを検証します。
 
 ## Python
 
@@ -73,7 +78,7 @@ git commit -m "Adopt TypeScript project preset"
 mkdir python-demo
 cd python-demo
 
-PRESET_VERSION=1.5.0
+PRESET_VERSION=2.0.0
 # 初回に一つ選ぶ。scripts / django / fastapi はそれぞれ別の構成。
 PRESET_PROFILE=python-scripts
 uvx --python 3.12 \
@@ -151,12 +156,15 @@ git commit -m "Adopt Python project preset"
 既存設定を保持したまま登録するには、選んだ Profile で `--adopt --setup` を使います。その後に `--check`、lint、型チェック、アプリのテストを実行して導入 PR をレビューします。`--adopt` は依存の競合や Profile 切替を強制するオプションではありません。
 
 ```sh
-PRESET_VERSION=1.5.0
+# pnpm 未導入でも、このターミナル内で固定版を一時実行できる。
+pnpm() { npx --yes --ignore-scripts --package=pnpm@11.28.0 -- pnpm "$@"; }
+
+PRESET_VERSION=2.0.0
 # TypeScript / Hono の既存案件の例
 npx --yes --allow-remote=root --ignore-scripts \
   "https://github.com/omitsuhashi/project-presets-demo/releases/download/v${PRESET_VERSION}/project-presets-demo-${PRESET_VERSION}.tgz" \
   typescript-hono --adopt --setup
-npm exec -- project-presets typescript-hono --check
+pnpm exec project-presets typescript-hono --check
 # Python / Django の既存案件の例
 uvx --python 3.12 \
   --from "https://github.com/omitsuhashi/project-presets-demo/releases/download/v${PRESET_VERSION}/project_presets_demo-${PRESET_VERSION}-py3-none-any.whl" \
@@ -166,8 +174,8 @@ uv run --locked project-presets-python python-django --check
 
 旧 Python submodule 配布は、Git の通常の手順で submodule を取り外し、設定参照を wheel 方式へ変更する移行 PR を作ります。既存の Profile を別のフレームワークへ切り替える場合も、アプリの移行を含めて別途レビューします。
 
-一時実行した CLI は npm / uv のキャッシュに置かれます。採用した配布パッケージと Linter は CLI が案件の開発用依存へ登録するため、CI と他の開発環境でも lock から同じ構成を再現できます。従来の配布パッケージの事前導入と、導入後の `npm exec` / `uv run` による実行も引き続き利用できます。
+一時実行した CLI は npm / uv のキャッシュに置かれます。採用した配布パッケージと Linter は CLI が案件の開発用依存へ登録するため、CI と他の開発環境でも lock から同じ構成を再現できます。配布パッケージの事前導入も可能で、導入後は `pnpm exec` / `uv run` で実行できます。
 
 通常は実行した CLI と同じ版の GitHub Release を登録します。別の配布先やローカル artifact を使う場合は `--source URL` を指定します。TypeScript は HTTP(S) / `file:` / Git、Python は HTTP(S) / `file://` の wheel URL を使えます。既存の公式以外の配布元は保持されるため、そこから別の版へ更新する場合は新しい配布元を明示してください。公開 URL は固定版を使い、実行 CLI と配布物の版を揃えます。
 
-参照: [npm exec / npx](https://docs.npmjs.com/cli/v12/commands/npm-exec/)、[uvx](https://docs.astral.sh/uv/guides/tools/)、[npm install](https://docs.npmjs.com/cli/v12/commands/npm-install/)、[uv の依存管理](https://docs.astral.sh/uv/concepts/projects/dependencies/)、[Ruff の継承と上書き](https://docs.astral.sh/ruff/configuration/)。
+参照: [npm exec / npx](https://docs.npmjs.com/cli/v12/commands/npm-exec/)、[pnpm install](https://pnpm.io/cli/install)、[pnpm import](https://pnpm.io/cli/import)、[uvx](https://docs.astral.sh/uv/guides/tools/)、[uv の依存管理](https://docs.astral.sh/uv/concepts/projects/dependencies/)、[Ruff の継承と上書き](https://docs.astral.sh/ruff/configuration/)。

@@ -9,16 +9,18 @@
 ```sh
 # TypeScript: node / hono / next のいずれかを選ぶ
 npx --yes --allow-remote=root --ignore-scripts \
-  https://github.com/omitsuhashi/project-presets-demo/releases/download/v1.5.0/project-presets-demo-1.5.0.tgz \
+  https://github.com/omitsuhashi/project-presets-demo/releases/download/v2.0.0/project-presets-demo-2.0.0.tgz \
   typescript-node --setup
 
 # Python: scripts / django / fastapi のいずれかを選ぶ
 uvx --python 3.12 \
-  --from https://github.com/omitsuhashi/project-presets-demo/releases/download/v1.5.0/project_presets_demo-1.5.0-py3-none-any.whl \
+  --from https://github.com/omitsuhashi/project-presets-demo/releases/download/v2.0.0/project_presets_demo-2.0.0-py3-none-any.whl \
   project-presets-python python-django --setup
 ```
 
-既存の lint 設定がある場合は、[導入手順の既存案件](docs/install.md#既存案件) に従って参照を統合し `--adopt --setup` を使います。Node.js / npm・Python / uv の導入も導入手順に記載しています。オプションなしは書き込みなしの preview、`--check` は整合性の確認です。未作成のディレクトリも `PROFILE DIRECTORY --setup` で初期化できます。CLI が採用版の共通パッケージも開発用依存に登録するため、CI では npm / uv lock から同じ設定を再現できます。
+既存の lint 設定がある場合は、[導入手順の既存案件](docs/install.md#既存案件) に従って参照を統合し `--adopt --setup` を使います。Node.js / npm・Python / uv の導入も導入手順に記載しています。オプションなしは書き込みなしの preview、`--check` は整合性の確認です。未作成のディレクトリも `PROFILE DIRECTORY --setup` で初期化できます。TypeScript 内部の依存導入・更新は配布パッケージに含む **pnpm 11.28.0** を使い、`packageManager` と `pnpm-lock.yaml` を保存します。pnpm の事前インストールは不要です。CLI が採用版の共通パッケージも開発用依存に登録するため、CI では pnpm / uv lock から同じ設定を再現できます。
+
+1.x の TypeScript 案件は `--version 2.0.0` を明示して [pnpm へ移行](docs/update.md#npm-の-1x-から-pnpm-へ移行する) します。lockfile・CI コマンドが変わるため major を上げています。Python は uv を継続します。
 
 ## 使い方・更新手順
 
@@ -47,7 +49,7 @@ ESLint 9 は [2026-08-06 に EOL](https://eslint.org/version-support/) です。
 
 ## 配布するものと管理する範囲
 
-[公開版 v1.5.0](https://github.com/omitsuhashi/project-presets-demo/releases/tag/v1.5.0) は npm tarball・Python wheel / sdist・`SHA256SUMS` を含みます。初回導入と明示した版の適用は、公開 URL から GitHub 認証なしで行えます。
+[公開版 v2.0.0](https://github.com/omitsuhashi/project-presets-demo/releases/tag/v2.0.0) は npm tarball・Python wheel / sdist・`SHA256SUMS` を含みます。初回導入と明示した版の適用は、公開 URL から GitHub 認証なしで行えます。
 
 - TypeScript: Profile の実行用 / 開発用依存と marker を管理。利用側は共通 package の設定を import / extends し、案件固有の上書きを保守。
 - Python: framework は実行用依存、preset / Ruff は開発用依存。コピーした共通設定と marker を管理し、案件固有の上書きは `pyproject.toml` で保守。
@@ -58,15 +60,17 @@ ESLint 9 は [2026-08-06 に EOL](https://eslint.org/version-support/) です。
 ## 検証
 
 ```sh
-npm ci --ignore-scripts
+# pnpm 未導入でも、このターミナル内で固定版を一時実行できる。
+pnpm() { npx --yes --ignore-scripts --package=pnpm@11.28.0 -- pnpm "$@"; }
+pnpm install --frozen-lockfile --ignore-scripts
 uv lock --check
-npm run lint
-npm run demo:ts
-npm run demo:py
-npm test
+pnpm run lint
+pnpm run demo:ts
+pnpm run demo:py
+pnpm test
 ```
 
-CI では manifest / catalog の整合性、Hono の応答、Next.js の build、Django / FastAPI のアプリを検証します。実際の tarball / wheel の導入・依存更新、ネイティブの lock、設定保持、手動変更の拒否、開発依存なしの Python 実行、revert を確認します。テスト用の `v2.0.0` は一時 fixture です。
+CI では manifest / catalog の整合性、Hono の応答、Next.js の build、Django / FastAPI のアプリを検証します。実際の tarball / wheel の導入・依存更新、ネイティブの lock、設定保持、手動変更の拒否、開発依存なしの Python 実行、revert を確認します。導入・更新テストは一時 fixture を使い、公開済み 1.5.0 の npm lock からの移行と revert も検証します。
 
 旧 Python submodule の設定パスは互換用に残しています。新規導入は wheel を使い、移行方法は [導入手順](docs/install.md#既存案件) を参照してください。
 
