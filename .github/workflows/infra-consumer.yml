@@ -72,7 +72,7 @@ jobs:
           terraform_version: '1.16.5'
           terraform_wrapper: false
       - if: needs.configuration.outputs.ready == 'true'
-        uses: aws-actions/configure-aws-credentials@cabfdba3510de1431bac9dba27511d97497fc100 # v5
+        uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # v5
         with:
           role-to-assume: ${{ needs.configuration.outputs.role }}
           aws-region: ${{ needs.configuration.outputs.region }}
