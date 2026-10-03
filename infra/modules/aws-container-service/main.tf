@@ -33,6 +33,10 @@ variable "environment" {
 variable "secret_arns" {
   type    = map(string)
   default = {}
+  validation {
+    condition     = alltrue([for arn in values(var.secret_arns) : can(regex("^arn:aws:(secretsmanager:[a-z0-9-]+:[0-9]{12}:secret:[A-Za-z0-9/_+=.@-]+|ssm:[a-z0-9-]+:[0-9]{12}:parameter/[A-Za-z0-9_./-]+)$", arn))])
+    error_message = "Use literal Secrets Manager or SSM parameter ARNs; wildcard permissions and secret values are not supported."
+  }
 }
 variable "cpu" {
   type    = number

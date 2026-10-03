@@ -40,3 +40,8 @@ run "reject_wildcard_trust" {
   variables { github_branch = "*" }
   expect_failures = [var.github_branch]
 }
+run "reject_wildcard_secret_permissions" {
+  command = plan
+  variables { secret_arns = { TOKEN = "*" } }
+  expect_failures = [var.secret_arns]
+}
