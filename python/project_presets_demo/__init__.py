@@ -117,11 +117,19 @@ def apply(args):
         writes[destination] = content
     if previous and set(previous["files"]) - set(hashes):
         raise ValueError("Removing managed configuration requires a migration")
+    # ponytail: one standalone project root; shared repository workflows need explicit directory inputs.
+    workflow = target / ".github/workflows/update-presets.yml"
+    if not workflow.exists():
+        template = (Path(__file__).parent / "update-presets.yml").read_text()
+        writes[workflow] = re.sub(r"(update-consumer\.yml@v)\d+\.\d+\.\d+", lambda match: match[1] + release, template).encode()
     state = {"profile": args.profile, "release": release, "files": hashes, "devDependencies": {"ruff": ruff}}
     if dependencies:
         state["dependencies"] = dependencies
-    print(json.dumps({"profile": args.profile, "release": release, "source": artifact if install_preset else preset_source, "ruff": ruff, "dependencies": dependencies, "files": list(hashes), "create": ["pyproject.toml"] if initialize else []}, indent=2))
+    create = (["pyproject.toml"] if initialize else []) + ([".github/workflows/update-presets.yml"] if not workflow.exists() else [])
+    print(json.dumps({"profile": args.profile, "release": release, "source": artifact if install_preset else preset_source, "ruff": ruff, "dependencies": dependencies, "files": list(hashes), "create": create}, indent=2))
     if args.check:
+        if not workflow.exists():
+            raise ValueError("Run --setup to add the automatic update workflow")
         if previous != state or config is None or not has_preset:
             raise ValueError("Apply the installed preset before merging")
         for name, digest in hashes.items():
@@ -164,3 +172,4 @@ def apply(args):
         if args.sync:
             subprocess.run(["uv", "sync", "--locked"], cwd=target, check=True)
             check_environment(target, {"project-presets-demo": release, "ruff": ruff, **dependencies})
+        print("Automatic update PRs: commit .github/workflows/update-presets.yml with the preset files and push to the GitHub default branch. Enable Actions > General > Allow GitHub Actions to create and approve pull requests. Existing workflows are preserved; review their schedule and tests.")

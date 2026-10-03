@@ -130,12 +130,18 @@ with tempfile.TemporaryDirectory(prefix="project-presets-packages-") as director
         preview = json.loads(run(temp, *entry, str(consumer), "--source", source))
         assert preview["profile"] == profile
         assert ("package.json" if typescript else "pyproject.toml") in preview["create"]
+        assert ".github/workflows/update-presets.yml" in preview["create"]
         assert consumer.exists() == existed
         assert not consumer.exists() or not list(consumer.iterdir()), "Preview must not create project files"
         run(temp, *entry, str(consumer), "--check", "--source", source, expected=1)
         assert consumer.exists() == existed
         assert not consumer.exists() or not list(consumer.iterdir())
         run(temp, *entry, str(consumer), "--setup", "--source", source)
+        workflow = consumer / ".github/workflows/update-presets.yml"
+        automation = workflow.read_bytes()
+        assert b"update-consumer.yml@v2.0.0" in automation
+        assert b"cron: '15 2 * * 1'" in automation and b"workflow_dispatch:" in automation
+        assert b"contents: write" in automation and b"pull-requests: write" in automation
         run(temp, *entry, str(consumer), "--check", "--source", source)
         name = "package.json" if typescript else "pyproject.toml"
         text = (consumer / name).read_bytes()
@@ -151,10 +157,15 @@ with tempfile.TemporaryDirectory(prefix="project-presets-packages-") as director
             assert created["requires-python"] == ">=3.12,<3.13"
         run(temp, *entry, str(consumer), "--setup", "--source", source)
         assert (consumer / name).read_bytes() == text, "Repeat setup must preserve the manifest"
+        assert workflow.read_bytes() == automation, "Repeat setup must preserve the update workflow"
+        workflow.unlink()
+        run(temp, *entry, str(consumer), "--check", "--source", source, expected=1)
+        run(temp, *entry, str(consumer), "--setup", "--source", source)
+        assert workflow.read_bytes() == automation, "Setup restores a missing update workflow"
         (consumer / name).unlink()
         run(temp, *entry, str(consumer), "--setup", "--source", source, expected=1)
         assert not (consumer / name).exists(), "A deleted adopted manifest needs recovery, not reinitialization"
-        print(f"PASS: {profile} initializes a missing directory/manifest, previews without writes and rejects deleted manifests")
+        print(f"PASS: {profile} bootstraps its manifest, dependencies and update workflow; preview is read-only and setup restores the workflow")
 
     legacy = temp / "npm-migration"
     init(legacy)
@@ -222,6 +233,9 @@ with tempfile.TemporaryDirectory(prefix="project-presets-packages-") as director
     assert all((ts / name).read_bytes() == content for name, content in ready.items())
     pnpm(ts, "exec", "eslint", "--version")
     pnpm(ts, "exec", "tsc", "--version")
+    ts_workflow = ts / ".github/workflows/update-presets.yml"
+    ts_workflow.write_text(ts_workflow.read_text().replace("15 2 * * 1", "45 2 * * 1") + "\n# Consumer-owned schedule.\n")
+    ts_automation = ts_workflow.read_bytes()
     (ts / "main.ts").write_text("export const message = 'consumer';\nconsole.log(message);\n")
     with (ts / "eslint.config.mjs").open("a") as file:
         file.write("\n// Consumer owns this comment.\n")
@@ -265,6 +279,9 @@ ignore = ["F401"]
     run(py, *pycli, "--setup")
     assert all((py / name).read_bytes() == content for name, content in ready.items())
     py_config = tomllib.loads((py / "pyproject.toml").read_text())["tool"]["ruff"]
+    py_workflow = py / ".github/workflows/update-presets.yml"
+    py_workflow.write_text(py_workflow.read_text().replace("15 2 * * 1", "45 2 * * 1") + "\n# Consumer-owned schedule.\n")
+    py_automation = py_workflow.read_bytes()
     py_source = (py / "main.py").read_bytes()
     commit(py, "Adopt old Python wheel")
     managed = py / ".project-presets/ruff/scripts.toml"
@@ -291,11 +308,13 @@ ignore = ["F401"]
             assert json.loads((ts / "node_modules/@types/node/package.json").read_text())["version"] == current_node_types
             assert (ts / "eslint.config.mjs").read_bytes() == ts_config
             assert (ts / "main.ts").read_bytes() == ts_source
+            assert ts_workflow.read_bytes() == ts_automation
             assert json.loads((ts / "package.json").read_text())["scripts"]["custom"] == "keep"
         else:
             assert run(py, "uv", "run", "--locked", "ruff", "--version") == f"ruff {current_ruff}"
             assert tomllib.loads((py / "pyproject.toml").read_text())["tool"]["ruff"] == py_config
             assert (py / "main.py").read_bytes() == py_source
+            assert py_workflow.read_bytes() == py_automation
             assert 'extend-select = ["C4"]' in (py / ".project-presets/ruff/base.toml").read_text()
         git(consumer, "revert", "--no-edit", revision)
         if consumer == ts:

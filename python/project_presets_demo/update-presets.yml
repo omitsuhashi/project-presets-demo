@@ -1,4 +1,5 @@
-# Copy to .github/workflows/update-presets.yml in the consumer repository.
+# Installed by --setup at the standalone consumer repository root.
+# Commit/push this file and enable GitHub Actions to create pull requests.
 name: Update preset packages
 
 on:
@@ -7,7 +8,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Version, e.g. 2.0.0. Empty follows the current major.'
+        description: 'Stable version. Empty follows the current major.'
         default: ''
         type: string
 
@@ -21,7 +22,7 @@ concurrency:
 
 jobs:
   update:
-    uses: omitsuhashi/project-presets-demo/.github/workflows/update-consumer.yml@v2.0.0
+    uses: omitsuhashi/project-presets-demo/.github/workflows/update-consumer.yml@v2.1.0
     with:
       version: ${{ inputs.version || '' }}
       # For Python applications, set actual tests here, for example:

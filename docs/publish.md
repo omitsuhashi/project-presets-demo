@@ -53,7 +53,7 @@ pnpm install --frozen-lockfile --ignore-scripts
 | Python の共通設定 | `python/project_presets_demo/config/` |
 | CLI / 更新処理 | `scripts/apply-profile.mjs` / `python/project_presets_demo/__init__.py` / `scripts/update-consumer.py` |
 
-Next.js と `eslint-config-next` は同じ版に揃えます。React・型定義、framework の Python / Node 要件も併せて確認します。新しい Profile を作る時は代表アプリと導入・更新テストも追加します。
+Next.js と `eslint-config-next` は同じ版に揃えます。React・型定義、framework の Python / Node 要件も併せて確認します。新しい Profile を作る時は代表アプリと導入・更新テストも追加します。workflow の原本は `python/project_presets_demo/update-presets.yml` 一つで、npm tarball と Python wheel の両方に含まれます。既存利用側の同名 workflow は保持するため、必要な更新 script の移行は別途案内します。
 
 manifest の更新には pnpm / uv の通常の操作を使えます。Python の例は、候補から選んだ版を `DJANGO_VERSION` に設定して実行します。
 
@@ -67,10 +67,10 @@ uv add --optional django "django==${DJANGO_VERSION}" --no-sync
 
 ## 3. 配布版と変更説明を更新する
 
-次は `2.0.1` を準備する例です。公開済みかを確認し、未使用の版を選んでください。この例の実行は公開操作ではありません。
+次は `2.1.1` を準備する例です。公開済みかを確認し、未使用の版を選んでください。この例の実行は公開操作ではありません。
 
 ```sh
-PRESET_RELEASE=2.0.1
+PRESET_RELEASE=2.1.1
 pnpm version "$PRESET_RELEASE" --no-git-tag-version --no-git-checks --config.ignore-scripts=true
 uv version "$PRESET_RELEASE" --no-sync
 pnpm install --lockfile-only --no-frozen-lockfile --ignore-scripts
@@ -83,7 +83,7 @@ uv lock
 
 - `CHANGELOG.md`: 変更、互換性、対象 Profile、利用側で必要な作業。
 - `README.md` / `docs/install.md` / `docs/update.md`: 推奨する配布版・依存の版・公開 URL・実行例。
-- `.github/workflows/update-consumer.yml` の配布元 checkout の `ref` と、`examples/update-presets.yml` の reusable workflow の固定タグ: 新しい配布タグを指定。
+- `.github/workflows/update-consumer.yml` の配布元 checkout の `ref` と、`python/project_presets_demo/update-presets.yml` の配布用 workflow の固定タグ: 新しい配布タグを指定。CLI はこのファイルをパッケージに含め、利用側の初回 setup 時に実行した配布版のタグへ固定して配置する。
 
 新しいタグは CI 中には未公開ですが、通常の検証 workflow はこの reusable workflow を呼び出しません。配布物の公開後に、そのタグで利用側の workflow を実行します。新しい Profile や更新 CLI を使う利用側には、workflow の参照タグの更新も案内します。
 
@@ -113,7 +113,7 @@ PR のマージ後、`main` の CI 成功を確認してから実行します。
 ```sh
 git switch main
 git pull --ff-only
-PRESET_RELEASE=2.0.1
+PRESET_RELEASE=2.1.1
 # npm と Python の版がこの値と一致することを確認する。
 node -p "JSON.parse(require('node:fs').readFileSync('package.json')).version"
 uv version --short
