@@ -10,7 +10,7 @@ on:
       provider-ref:
         description: Pin the updater checkout to the same tag as this reusable workflow
         type: string
-        default: typescript-v2.2.0
+        required: true
       directory:
         type: string
         default: .
