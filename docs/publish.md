@@ -6,7 +6,7 @@
 
 [Dependabot](../.github/dependabot.yml) は npm・uv・GitHub Actions の更新候補を毎週 PR にします。手動で候補を選んでも同じ手順です。候補 PR のマージだけでは配布物は公開されません。
 
-配布版は npm と Python で同じ `X.Y.Z` にします。
+現在のアプリ用配布版は npm と Python で同じ `X.Y.Z` にします。インフラ用は別 package / 別タグで、[インフラの配布側更新](infrastructure.md#配布側が更新する) に従います。
 
 | 変更 | 配布版の判断 |
 | --- | --- |

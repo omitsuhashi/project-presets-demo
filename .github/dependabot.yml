@@ -13,3 +13,15 @@ updates:
     directory: /
     schedule:
       interval: weekly
+  - package-ecosystem: terraform
+    directory: /infra/modules/aws-foundation
+    schedule:
+      interval: weekly
+  - package-ecosystem: terraform
+    directory: /infra/modules/aws-container-service
+    schedule:
+      interval: weekly
+  - package-ecosystem: uv
+    directory: /infra
+    schedule:
+      interval: weekly

@@ -1,0 +1,5 @@
+.venv/
+uv.lock
+**/.terraform/
+modules/**/.terraform.lock.hcl
+__pycache__/

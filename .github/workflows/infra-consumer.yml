@@ -1,0 +1,127 @@
+name: Deploy or update a consumer's AWS infrastructure
+
+on:
+  workflow_call:
+    inputs:
+      mode:
+        description: deploy or update
+        type: string
+        default: deploy
+
+jobs:
+  configuration:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      ready: ${{ steps.config.outputs.ready }}
+      role: ${{ steps.config.outputs.role }}
+      region: ${{ steps.config.outputs.region }}
+      account: ${{ steps.config.outputs.account }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          ref: ${{ inputs.mode == 'update' && github.event.repository.default_branch || github.sha }}
+          persist-credentials: false
+      - id: config
+        name: Read bootstrap configuration without AWS authentication
+        env:
+          MODE: ${{ inputs.mode }}
+        run: |
+          python3 - <<'PY'
+          import json, os, re
+          from pathlib import Path
+          assert os.environ['MODE'] in ['deploy', 'update'], 'Use deploy or update'
+          config = Path('infra/aws.json')
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
+              if not config.exists():
+                  output.write('ready=false\n')
+                  with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as summary:
+                      summary.write('Infrastructure files are ready. AWS bootstrap is deferred; no AWS authentication or deployment was attempted.\n')
+              else:
+                  data = json.loads(config.read_text())
+                  assert re.fullmatch(r'[0-9]{12}', data['account'])
+                  assert re.fullmatch(r'[a-z]{2}-[a-z]+-[1-9][0-9]*', data['region'])
+                  assert re.fullmatch(r'arn:aws:iam::' + data['account'] + r':role/[A-Za-z0-9+=,.@_/-]+', data['role'])
+                  output.write('ready=true\n')
+                  for key in ['account', 'role', 'region']:
+                      output.write(f'{key}={data[key]}\n')
+          PY
+  infrastructure:
+    needs: configuration
+    if: needs.configuration.outputs.ready == 'true' || inputs.mode == 'update'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          ref: ${{ inputs.mode == 'update' && github.event.repository.default_branch || github.sha }}
+          path: consumer
+          persist-credentials: false
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          repository: omitsuhashi/project-presets-demo
+          ref: infra-tools/v1
+          path: provider
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@94527f2e458b27549849d47d273a16bec83a01e9 # v7
+        with:
+          version: '0.11.7'
+          python-version: '3.12'
+      - uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3
+        with:
+          terraform_version: '1.16.5'
+          terraform_wrapper: false
+      - if: needs.configuration.outputs.ready == 'true'
+        uses: aws-actions/configure-aws-credentials@cabfdba3510de1431bac9dba27511d97497fc100 # v5
+        with:
+          role-to-assume: ${{ needs.configuration.outputs.role }}
+          aws-region: ${{ needs.configuration.outputs.region }}
+          allowed-account-ids: ${{ needs.configuration.outputs.account }}
+          role-session-name: preset-${{ github.run_id }}
+      - name: Build, health check and deploy an immutable image with Terraform
+        if: inputs.mode == 'deploy'
+        run: uv run --project provider/infra project-presets-infra deploy --directory consumer
+      - name: Update pinned modules and provider, preserving consumer inputs
+        if: inputs.mode == 'update'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          uv run --project provider/infra project-presets-infra update --directory consumer
+          uv run --project provider/infra project-presets-infra check --directory consumer
+          uv run --project provider/infra project-presets-infra container-check --directory consumer
+      - name: Plan both states without applying resources
+        if: inputs.mode == 'update' && needs.configuration.outputs.ready == 'true'
+        run: uv run --project provider/infra project-presets-infra plan --directory consumer
+      - name: Open an update PR after validation and both real plans
+        if: inputs.mode == 'update'
+        working-directory: consumer
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          BASE_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          version=$(python3 -c 'import json; print(json.load(open("infra/.project-infra.json"))["release"])')
+          branch="codex/update-infra-aws-container-$version"
+          git add -- Dockerfile .dockerignore infra/.project-infra.json infra/foundation/preset.tf.json infra/app/preset.tf.json infra/foundation/.terraform.lock.hcl infra/app/.terraform.lock.hcl
+          if git diff --cached --quiet; then exit 0; fi
+          gh auth setup-git
+          if [ -n "$(git ls-remote --heads origin "$branch")" ]; then
+            echo "An update branch already exists: $branch; preserving its review and any user edits."
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git switch -c "$branch"
+          git commit -m "Update AWS infrastructure preset to $version"
+          git push origin "$branch"
+          body="$RUNNER_TEMP/infra-pr.md"
+          cat > "$body" <<'BODY'
+          Updates the independent AWS module references and managed AWS provider pin. Consumer variables and extra Terraform resources are preserved.
+
+          Validation: Terraform validate and a container health check. After AWS bootstrap, both foundation/app plans also run retaining the deployed image digest. The Actions run contains the plans; no resources were applied by this update job.
+
+          Review replacement/deletion effects before merging. Foundation changes require an operator to run the updated preset's `bootstrap --apply` first; CI refuses to deploy while the foundation plan has changes. After merge, the deployment workflow applies the app and builds a new image. Reverting Git does not restore deleted infrastructure or data. See the distribution repository's docs/infrastructure.md.
+
+          PRs created with GITHUB_TOKEN do not trigger other PR workflows. These checks run before PR creation; run any additional consumer checks explicitly before merging.
+          BODY
+          gh pr create --base "$BASE_BRANCH" --head "$branch" --title "Update AWS infrastructure preset to $version" --body-file "$body"
