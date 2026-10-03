@@ -1,10 +1,12 @@
 """Exercise release artifacts, both native locks, local overrides and rollback."""
 
 import json
+import os
 import shutil
 import subprocess
 import sys
 import tempfile
+import textwrap
 import threading
 from contextlib import ExitStack
 from functools import partial
@@ -17,13 +19,17 @@ ROOT = Path(__file__).resolve().parent.parent
 
 
 def run(cwd, *command, expected=0):
-    result = subprocess.run(command, cwd=cwd, capture_output=True, text=True)
+    result = subprocess.run(command, cwd=cwd, capture_output=True, text=True, env={**os.environ, "CI": "true"})
     assert result.returncode == expected, f"{' '.join(map(str, command))}\n{result.stdout}\n{result.stderr}"
     return result.stdout.strip()
 
 
 def git(cwd, *command):
     return run(cwd, "git", *command)
+
+
+def pnpm(cwd, *command):
+    return run(cwd, "node", str(ROOT / "node_modules/pnpm/bin/pnpm.mjs"), "--ignore-workspace", *command)
 
 
 def init(path):
@@ -58,6 +64,7 @@ manifest = json.loads((ROOT / "package.json").read_text())
 python = tomllib.loads((ROOT / "pyproject.toml").read_text())
 catalog = json.loads((ROOT / "profiles.json").read_text())
 assert manifest["version"] == python["project"]["version"]
+assert manifest["packageManager"] == "pnpm@" + manifest["dependencies"]["pnpm"]
 assert python["project"]["dependencies"] == ["ruff==" + catalog["python-scripts"]["devDependencies"]["ruff"]]
 current_ruff = catalog["python-scripts"]["devDependencies"]["ruff"]
 current_node_types = catalog["typescript-node"]["devDependencies"]["@types/node"]
@@ -105,7 +112,7 @@ with tempfile.TemporaryDirectory(prefix="project-presets-packages-") as director
         if release == "2.0.0":
             with (provider / "python/project_presets_demo/config/base.toml").open("a") as file:
                 file.write('\nextend-select = ["C4"]\n')
-        run(provider, "npm", "pack", "--ignore-scripts", "--pack-destination", str(artifacts))
+        pnpm(provider, "pack", "--config.ignore-scripts=true", "--pack-destination", str(artifacts))
         run(provider, "uv", "build", "--out-dir", str(artifacts))
 
     # Real npx / uvx entry points must bootstrap projects without manifests.
@@ -138,6 +145,8 @@ with tempfile.TemporaryDirectory(prefix="project-presets-packages-") as director
         if typescript:
             assert created["dependencies"] == settings.get("dependencies", {})
             assert created["private"] and created["type"] == "module"
+            assert created["packageManager"] == manifest["packageManager"]
+            assert (consumer / "pnpm-lock.yaml").exists() and not (consumer / "package-lock.json").exists()
         else:
             assert created["requires-python"] == ">=3.12,<3.13"
         run(temp, *entry, str(consumer), "--setup", "--source", source)
@@ -147,11 +156,53 @@ with tempfile.TemporaryDirectory(prefix="project-presets-packages-") as director
         assert not (consumer / name).exists(), "A deleted adopted manifest needs recovery, not reinitialization"
         print(f"PASS: {profile} initializes a missing directory/manifest, previews without writes and rejects deleted manifests")
 
+    legacy = temp / "npm-migration"
+    init(legacy)
+    (legacy / "package.json").write_text(json.dumps({
+        "name": "legacy-consumer", "private": True, "type": "module", "packageManager": "npm@12.1.0",
+        "dependencies": {"ms": "2.1.2"}, "scripts": {"test": "node main.ts"},
+    }))
+    (legacy / "main.ts").write_text("export const message = 'preserved';\n")
+    old_source = "https://github.com/omitsuhashi/project-presets-demo/releases/download/v1.5.0/project-presets-demo-1.5.0.tgz"
+    run(legacy, "npx", "--yes", "--allow-remote=root", "--ignore-scripts", old_source, "typescript-node", "--setup")
+    old_lock = (legacy / "package-lock.json").read_bytes()
+    with (legacy / "eslint.config.mjs").open("a") as file:
+        file.write("\n// Application-owned setting.\n")
+    config = (legacy / "eslint.config.mjs").read_bytes()
+    commit(legacy, "Adopt published npm preset")
+    new_entry = ["npx", "--yes", "--allow-remote=root", "--ignore-scripts", remote + "/project-presets-demo-2.0.0.tgz", "typescript-node"]
+    run(legacy, *new_entry, "--setup", "--source", remote + "/project-presets-demo-1.0.0.tgz", expected=1)
+    assert (legacy / "package-lock.json").read_bytes() == old_lock, "Failed migration must keep the original npm lock"
+    git(legacy, "restore", ".")
+    (legacy / "pnpm-lock.yaml").unlink()
+    updater = [sys.executable, str(ROOT / "scripts/update-consumer.py"), "--artifacts", str(artifacts)]
+    run(legacy, *updater, "--version", "1.5.0", expected=1)
+    run(legacy, *updater, "--version", "2.0.0")
+    migrated = json.loads((legacy / "package.json").read_text())
+    assert migrated["packageManager"] == manifest["packageManager"]
+    assert migrated["dependencies"]["ms"] == "2.1.2"
+    assert migrated["scripts"]["test"] == "node main.ts"
+    assert (legacy / "node_modules/ms/package.json").exists()
+    assert (legacy / "eslint.config.mjs").read_bytes() == config
+    assert (legacy / "pnpm-lock.yaml").exists() and not (legacy / "package-lock.json").exists()
+    workflow = (ROOT / ".github/workflows/update-consumer.yml").read_text()
+    staging = workflow[workflow.index("          for path in "):workflow.index("          if git diff --cached")]
+    run(legacy, "bash", "-e", "-c", "PRESET_DIRECTORY=.\n" + textwrap.dedent(staging))
+    assert "D\tpackage-lock.json" in git(legacy, "diff", "--cached", "--name-status")
+    assert "A\tpnpm-lock.yaml" in git(legacy, "diff", "--cached", "--name-status")
+    migration = commit(legacy, "Migrate npm lock to pnpm")
+    git(legacy, "revert", "--no-edit", migration)
+    run(legacy, "npm", "ci", "--allow-remote=root", "--ignore-scripts")
+    run(legacy, "node", "node_modules/project-presets-demo/scripts/apply-profile.mjs", "typescript-node", "--check")
+    assert (legacy / "package-lock.json").read_bytes() == old_lock
+    assert not (legacy / "pnpm-lock.yaml").exists()
+    assert git(legacy, "status", "--porcelain") == ""
+    print("PASS: published npm 1.5.0 migrates to pnpm, preserves app dependencies/settings, retains npm lock on failure and reverts")
+
     ts, py = temp / "typescript", temp / "python"
     init(ts)
     init(py)
     (ts / "package.json").write_text('{"name":"consumer","private":true,"type":"module","scripts":{"custom":"keep"}}\n')
-    flags = ["--ignore-scripts", "--no-audit", "--no-fund"]
     npm_source = remote + "/project-presets-demo-1.0.0.tgz"
     one_shot = ["npx", "--yes", "--allow-remote=root", "--ignore-scripts", npm_source, "typescript-node"]
     cli = ["node", "node_modules/project-presets-demo/scripts/apply-profile.mjs", "typescript-node"]
@@ -166,17 +217,17 @@ with tempfile.TemporaryDirectory(prefix="project-presets-packages-") as director
     assert not (ts / ".project-preset.json").exists()
     run(ts, *one_shot, "--setup", "--source", npm_source)
     run(ts, *cli, "--check")
-    ready = {name: (ts / name).read_bytes() for name in ["package.json", "package-lock.json", ".project-preset.json", "eslint.config.mjs", "tsconfig.json"]}
+    ready = {name: (ts / name).read_bytes() for name in ["package.json", "pnpm-lock.yaml", ".project-preset.json", "eslint.config.mjs", "tsconfig.json"]}
     run(ts, *cli, "--setup")
     assert all((ts / name).read_bytes() == content for name, content in ready.items())
-    run(ts, "npm", "exec", "--", "eslint", "--version")
-    run(ts, "npm", "exec", "--", "tsc", "--version")
+    pnpm(ts, "exec", "eslint", "--version")
+    pnpm(ts, "exec", "tsc", "--version")
     (ts / "main.ts").write_text("export const message = 'consumer';\nconsole.log(message);\n")
     with (ts / "eslint.config.mjs").open("a") as file:
         file.write("\n// Consumer owns this comment.\n")
     ts_source = (ts / "main.ts").read_bytes()
     ts_config = (ts / "eslint.config.mjs").read_bytes()
-    commit(ts, "Adopt old npm package")
+    commit(ts, "Adopt old pnpm package")
     (ts / "eslint.config.mjs").unlink()
     run(ts, *cli, "--write", expected=1)
     (ts / "eslint.config.mjs").write_bytes(ts_config)
@@ -237,7 +288,7 @@ ignore = ["F401"]
         assert json.loads((consumer / ".project-preset.json").read_text())["release"] == "2.0.0"
         revision = commit(consumer, "Update packages and locks")
         if consumer == ts:
-            assert json.loads((ts / "package-lock.json").read_text())["packages"]["node_modules/@types/node"]["version"] == current_node_types
+            assert json.loads((ts / "node_modules/@types/node/package.json").read_text())["version"] == current_node_types
             assert (ts / "eslint.config.mjs").read_bytes() == ts_config
             assert (ts / "main.ts").read_bytes() == ts_source
             assert json.loads((ts / "package.json").read_text())["scripts"]["custom"] == "keep"
@@ -248,9 +299,9 @@ ignore = ["F401"]
             assert 'extend-select = ["C4"]' in (py / ".project-presets/ruff/base.toml").read_text()
         git(consumer, "revert", "--no-edit", revision)
         if consumer == ts:
-            run(ts, "npm", "ci", "--allow-remote=root", *flags)
+            pnpm(ts, "install", "--frozen-lockfile", "--ignore-scripts")
             run(ts, *cli, "--check")
-            assert json.loads((ts / "package-lock.json").read_text())["packages"]["node_modules/@types/node"]["version"] == "24.19.0"
+            assert json.loads((ts / "node_modules/@types/node/package.json").read_text())["version"] == "24.19.0"
         else:
             run(py, "uv", "sync", "--locked")
             run(py, *pycli, "--check")

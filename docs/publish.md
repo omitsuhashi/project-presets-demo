@@ -26,9 +26,17 @@ git pull --ff-only
 git switch -c codex/update-presets
 ```
 
-Node.js 24 / npm 12、uv 0.11.7、Python 3.12、Git、GitHub CLI を使います。push・PR・Release 操作には配布 repository への書き込み権限が必要です。
+Node.js 24 / npm 12、uv 0.11.7、Python 3.12、Git、GitHub CLI を使います。内部の管理・検証・pack は pnpm 11.28.0 に固定します。Dependabot の `npm` ecosystem は pnpm lock も対象です。push・PR・Release 操作には配布 repository への書き込み権限が必要です。
 
 GitHub CLI 未認証なら `gh auth login` を行います。Git の push に HTTPS を使う場合は `gh auth setup-git` でその認証を使えます。
+
+pnpm 未導入でも固定版を使えるシェル関数を用意し、lock から導入します。
+
+```sh
+# pnpm 未導入でも、このターミナル内で固定版を一時実行できる。
+pnpm() { npx --yes --ignore-scripts --package=pnpm@11.28.0 -- pnpm "$@"; }
+pnpm install --frozen-lockfile --ignore-scripts
+```
 
 ## 2. manifest・Profile・設定を揃える
 
@@ -38,6 +46,7 @@ GitHub CLI 未認証なら `gh auth login` を行います。Git の push に HT
 | --- | --- |
 | TypeScript / ESLint / Hono / Next.js / React / 型定義 | `profiles.json` の依存、`package.json` の `dependencies`（ESLint / TypeScript）または検証用 `devDependencies`、該当する `peerDependencies` / 設定 |
 | npm パッケージ自体が依存する共通 lint ツール | `package.json` の `dependencies`、必要な設定 |
+| pnpm | `package.json` の `dependencies.pnpm` / `packageManager`、CI と手順書の固定版。一時 CLI と利用側は同じ pnpm を使う |
 | Ruff | `pyproject.toml` の `dependencies`、全 Python Profile の `devDependencies`、互換用 `profiles/python-scripts/requirements-dev.txt` |
 | Django / FastAPI / Uvicorn | `pyproject.toml` の `optional-dependencies`、対応 Profile の `dependencies` |
 | TypeScript の共通設定 | `typescript/` |
@@ -46,7 +55,7 @@ GitHub CLI 未認証なら `gh auth login` を行います。Git の push に HT
 
 Next.js と `eslint-config-next` は同じ版に揃えます。React・型定義、framework の Python / Node 要件も併せて確認します。新しい Profile を作る時は代表アプリと導入・更新テストも追加します。
 
-manifest の更新には npm / uv の通常の操作を使えます。Python の例は、候補から選んだ版を `DJANGO_VERSION` に設定して実行します。
+manifest の更新には pnpm / uv の通常の操作を使えます。Python の例は、候補から選んだ版を `DJANGO_VERSION` に設定して実行します。
 
 ```sh
 # DJANGO_VERSION に検証対象の実在する版を設定した後に実行する。
@@ -58,17 +67,17 @@ uv add --optional django "django==${DJANGO_VERSION}" --no-sync
 
 ## 3. 配布版と変更説明を更新する
 
-次は `1.5.1` を準備する例です。公開済みかを確認し、未使用の版を選んでください。この例の実行は公開操作ではありません。
+次は `2.0.1` を準備する例です。公開済みかを確認し、未使用の版を選んでください。この例の実行は公開操作ではありません。
 
 ```sh
-PRESET_RELEASE=1.5.1
-npm version "$PRESET_RELEASE" --no-git-tag-version --ignore-scripts
+PRESET_RELEASE=2.0.1
+pnpm version "$PRESET_RELEASE" --no-git-tag-version --no-git-checks --config.ignore-scripts=true
 uv version "$PRESET_RELEASE" --no-sync
-npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+pnpm install --lockfile-only --no-frozen-lockfile --ignore-scripts
 uv lock
 ```
 
-`npm version` が `package.json` / `package-lock.json`、`uv version` が `pyproject.toml` / `uv.lock` の版を更新します。lockfile を文字列置換で編集しません。[npm version](https://docs.npmjs.com/cli/v12/commands/npm-version/)、[uv version](https://docs.astral.sh/uv/reference/cli/#uv-version)。
+`pnpm version` が `package.json`、続く pnpm install が `pnpm-lock.yaml` を更新し、`uv version` が `pyproject.toml` / `uv.lock` の版を更新します。lockfile を文字列置換で編集しません。[pnpm](https://pnpm.io/cli/install)、[uv version](https://docs.astral.sh/uv/reference/cli/#uv-version)。
 
 次も更新して同じ PR に含めます。
 
@@ -81,17 +90,17 @@ uv lock
 ## 4. 検証して PR をマージする
 
 ```sh
-npm ci --ignore-scripts
+pnpm install --frozen-lockfile --ignore-scripts
 uv lock --check
-npm run lint
-npm run demo:ts
-npm run demo:py
+pnpm run lint
+pnpm run demo:ts
+pnpm run demo:py
 uv run --locked ruff check --config python/base.toml python/project_presets_demo scripts/check-packages.py scripts/update-consumer.py
-npm test
+pnpm test
 git diff --check
 ```
 
-CI は catalog と manifest の版、Hono / Next.js、Python の各構成を検証します。wheel / tarball を実際に build して導入・更新し、lock、設定保持、手動変更の拒否、revert を確認します。更新後の Ruff / Node 型定義は現在の catalog の採用版を使います。テスト内の `1.0.0` / `2.0.0` は一時的な配布物であり、GitHub の公開版ではありません。
+CI は catalog と manifest の版、Hono / Next.js、Python の各構成を検証します。wheel / tarball を実際に build して導入・更新し、lock、設定保持、手動変更の拒否、revert を確認します。更新後の Ruff / Node 型定義は現在の catalog の採用版を使います。テスト内の `1.0.0` / `2.0.0` は一時的な配布物です。実際に公開済みの 1.5.0 から npm → pnpm の移行・失敗時の lock 保持・revert も確認します。
 
 古い版を使うテスト用構成もあるため、非互換なルールや runtime を変更した時はその構成と移行テストも見直します。検証不能な互換性を前提に自動マージしません。
 
@@ -104,9 +113,9 @@ PR のマージ後、`main` の CI 成功を確認してから実行します。
 ```sh
 git switch main
 git pull --ff-only
-PRESET_RELEASE=1.5.1
+PRESET_RELEASE=2.0.1
 # npm と Python の版がこの値と一致することを確認する。
-npm pkg get version
+node -p "JSON.parse(require('node:fs').readFileSync('package.json')).version"
 uv version --short
 git tag "v${PRESET_RELEASE}"
 git push origin "v${PRESET_RELEASE}"

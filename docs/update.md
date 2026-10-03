@@ -19,7 +19,7 @@ marker に現在の Profile / 配布版が記録されています。未 commit 
 
 | 選び方 | 動作 |
 | --- | --- |
-| `--version 1.5.0` など明示 | 指定した公開版を選ぶ。major 更新・ダウングレードも明示指定 |
+| `--version 2.0.0` など明示 | 指定した公開版を選ぶ。major 更新は明示指定。TypeScript 1.x の適用には v1.5.0 の更新 script を使う |
 | `--version` を省略 | 現在と同じ major で、現在以上の最新 stable Release を選ぶ |
 | Profile の変更 | アプリの移行が必要。通常の更新 CLI は停止する |
 
@@ -32,17 +32,20 @@ marker に現在の Profile / 配布版が記録されています。未 commit 
 初回と同じ `npx` / `uvx` の入口を使えます。未 commit の作業を保存し、更新用 branch で、現在の Profile を変えずに新版を適用します。以下は Node.js / Python スクリプトの例です。Hono・Next.js・Django・FastAPI は marker の現在の Profile に置き換えます。
 
 ```sh
+# pnpm 未導入でも、このターミナル内で固定版を一時実行できる。
+pnpm() { npx --yes --ignore-scripts --package=pnpm@11.28.0 -- pnpm "$@"; }
+
 git switch -c codex/update-project-preset
-PRESET_VERSION=1.5.0
+PRESET_VERSION=2.0.0
 # TypeScript の案件で実行
 npx --yes --allow-remote=root --ignore-scripts \
   "https://github.com/omitsuhashi/project-presets-demo/releases/download/v${PRESET_VERSION}/project-presets-demo-${PRESET_VERSION}.tgz" \
   typescript-node --setup
-npm exec -- project-presets typescript-node --check
-npm exec -- eslint .
-npm exec -- tsc --noEmit
-npm run build --if-present
-npm run test --if-present
+pnpm exec project-presets typescript-node --check
+pnpm exec eslint .
+pnpm exec tsc --noEmit
+pnpm run --if-present build
+pnpm run --if-present test
 
 # Python の案件で実行
 uvx --python 3.12 \
@@ -64,13 +67,13 @@ uv run --locked ruff check .
 script を利用側の外に用意します。以下は利用側のルートで実行する例です。`../preset-provider` が未使用のディレクトリであることを確認してください。
 
 ```sh
-git clone --depth 1 --branch v1.5.0 \
+git clone --depth 1 --branch v2.0.0 \
   https://github.com/omitsuhashi/project-presets-demo.git ../preset-provider
 
 git switch -c codex/update-project-preset
-# 1.5.0 は公開済み版での例。採用する新版に置き換える。
+# 2.0.0 は公開済み版での例。採用する新版に置き換える。
 uv run --no-project --python 3.12 python ../preset-provider/scripts/update-consumer.py \
-  --directory . --version 1.5.0
+  --directory . --version 2.0.0
 ```
 
 script は版を導入してからその版の CLI で管理対象を更新するため、**更新 script に全体の preview モードはありません**。最初の導入 CLI の書き込みなし表示は、インストール済み版についての確認です。更新は branch 上で行い、diff とテストを確認します。
@@ -85,7 +88,7 @@ uv run --no-project --python 3.12 python ../preset-provider/scripts/update-consu
 
 ```sh
 # PRESET_TOOL_VERSION を採用する公開済みのツール版に置き換える。
-PRESET_TOOL_VERSION=1.5.0
+PRESET_TOOL_VERSION=2.0.0
 git -C ../preset-provider fetch --depth 1 origin tag "v${PRESET_TOOL_VERSION}"
 git -C ../preset-provider switch --detach "v${PRESET_TOOL_VERSION}"
 ```
@@ -94,7 +97,7 @@ git -C ../preset-provider switch --detach "v${PRESET_TOOL_VERSION}"
 
 | 言語 | 更新するもの | 実行する検証 |
 | --- | --- | --- |
-| TypeScript | 配布 tarball、Profile の依存、npm lock、marker | preset / lock の整合性、ESLint、`tsc --noEmit`、設定済みの `build` / `test` scripts |
+| TypeScript | 配布 tarball、Profile の依存、pnpm lock、marker | preset / lock の整合性、ESLint、`tsc --noEmit`、設定済みの `build` / `test` scripts |
 | Python | 配布 wheel、Ruff、framework の実行用依存、uv lock、コピーした設定、marker | preset / 依存 / lock の整合性、Ruff。Django は `manage.py check` / `test` も実行 |
 
 案件のコードと設定の上書きは保持します。管理対象の依存・コピーした設定の手動変更 / 削除、Profile 切替は停止します。変更を無条件に上書きする操作は用意していません。
@@ -119,7 +122,7 @@ git diff
 TypeScript は次を commit します。
 
 ```sh
-git add package.json package-lock.json .project-preset.json
+git add package.json pnpm-lock.yaml .project-preset.json
 git commit -m "Update TypeScript project preset"
 ```
 
@@ -131,6 +134,16 @@ git commit -m "Update Python project preset"
 ```
 
 必要なアプリ変更も追加して branch を push し、PR を作ります。自動マージはせず、CI・Release notes・案件固有の変更を確認してマージします。
+
+### npm の 1.x から pnpm へ移行する
+
+1.x の案件は同じ major を追うため、自動では 2.x に上がりません。上記の 2.0.0 の一時 CLI を使うか、2.0.0 の更新 script / workflow に `--version 2.0.0`（workflow input は `version: 2.0.0`）を指定します。`--setup` は `packageManager` を固定し、既存 `package-lock.json` / `npm-shrinkwrap.json` を pnpm の `import` で取り込み、最新 manifest で lock を生成します。frozen install と配布版確認が成功した後に npm lock を削除します。途中で失敗した場合は元の npm lock を保持します。
+
+移行 PR には `pnpm-lock.yaml` の追加、npm lock の削除、manifest / marker、CI の install / build / test コマンド変更を含めます。削除も commit するため、前述の `git add` に加え、存在していた npm lock を `git add -u -- package-lock.json`（shrinkwrap があれば同様）で stage します。CI は固定 pnpm で `install --frozen-lockfile --ignore-scripts` を使います。pnpm の厳格な依存配置で、未宣言の依存に頼ったアプリはエラーになる場合があるため、必要な依存をアプリ側で明示して lint / 型チェック / build / test を通します。
+
+移行前へ戻す場合は移行 commit を revert し、復元した npm lock で `npm ci --allow-remote=root --ignore-scripts` を実行します。未 commit の失敗なら Git から元の manifest / npm lock / marker を戻し、今回新規作成された未追跡の `pnpm-lock.yaml` だけを取り除いてから npm ci を行います。2.x の script は TypeScript 1.x の適用を変更前に停止します。1.x を継続する案件は v1.5.0 の script / workflow を使用してください。
+
+Python は従来の uv 導入・更新のままです。共通の配布版番号は 2.0.0 に揃えています。
 
 ## 3. 更新 PR を自動で受け取る
 
@@ -155,13 +168,13 @@ concurrency:
   cancel-in-progress: false
 jobs:
   update:
-    uses: omitsuhashi/project-presets-demo/.github/workflows/update-consumer.yml@v1.5.0
+    uses: omitsuhashi/project-presets-demo/.github/workflows/update-consumer.yml@v2.0.0
     with:
       version: ${{ inputs.version || '' }}
       test-command: uv run --locked python -m unittest discover
 ```
 
-TypeScript は `package.json` に `build` / `test` を設定し、追加検証が必要なら `test-command` に指定します。Django は標準の `manage.py check` / `test` を共通 script が実行します。必要な追加テストを同じ input に指定できます。monorepo は `directory: apps/api` など、対象 project の位置も指定します。
+TypeScript は `package.json` に `build` / `test` を設定し、追加検証が必要なら `test-command` に指定します。Django は標準の `manage.py check` / `test` を共通 script が実行します。必要な追加テストを同じ input に指定できます。`directory: apps/api` などで独立した project の位置を指定できます。TypeScript CLI はそのディレクトリの lock を管理し、親 workspace を更新しません。共有 pnpm workspace lock や `workspace:` 依存がある案件は、その workspace の移行・更新を別途扱います。
 
 利用側 repository の Settings → Actions → General で「Allow GitHub Actions to create and approve pull requests」を有効にします。Organization の設定で制限されている場合は管理者が設定します。専用 PAT は不要で、workflow の `GITHUB_TOKEN` を使います。
 
@@ -177,7 +190,9 @@ TypeScript は `package.json` に `build` / `test` を設定し、追加検証�
 
 ```sh
 # TypeScript
-npm ci --allow-remote=root --ignore-scripts
+# pnpm 未導入でも、このターミナル内で固定版を一時実行できる。
+pnpm() { npx --yes --ignore-scripts --package=pnpm@11.28.0 -- pnpm "$@"; }
+pnpm install --frozen-lockfile --ignore-scripts
 # Python（開発 / CI）
 uv sync --locked
 # Python（実行用依存だけの環境）
@@ -192,11 +207,11 @@ preset の更新だけでサーバーを再起動・再デプロイはしませ�
 
 更新全体はトランザクションではありません。途中の install / lint / test で失敗した場合も差分が残ることがあります。PR をマージせず、エラーと diff を確認します。設定の競合は案件側の上書きへ移すなど、原因を解消して再実行します。
 
-更新 branch では、更新前の commit から manifest・lock・marker・管理設定を戻し、上記の `npm ci` / `uv sync --locked` で環境を復旧します。まだ更新を commit しておらず、更新前の作業を保存済みなら、次で追跡済みのファイルを `HEAD` に戻せます。
+更新 branch では、更新前の commit から manifest・lock・marker・管理設定を戻し、上記の `pnpm install --frozen-lockfile --ignore-scripts` / `uv sync --locked` で環境を復旧します。まだ更新を commit しておらず、更新前の作業を保存済みなら、次で追跡済みのファイルを `HEAD` に戻せます。
 
 ```sh
 # TypeScript
-git restore --source=HEAD -- package.json package-lock.json .project-preset.json
+git restore --source=HEAD -- package.json pnpm-lock.yaml .project-preset.json
 # Python
 git restore --source=HEAD -- pyproject.toml uv.lock .project-preset.json .project-presets/ruff
 ```

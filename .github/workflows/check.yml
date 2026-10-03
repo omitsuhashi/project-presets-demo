@@ -18,14 +18,14 @@ jobs:
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version: '24'
-          cache: npm
+          package-manager-cache: false
       - uses: astral-sh/setup-uv@94527f2e458b27549849d47d273a16bec83a01e9 # v7
         with:
           version: '0.11.7'
-      - run: npm ci --ignore-scripts
+      - run: npx --yes --ignore-scripts --package=pnpm@11.28.0 -- pnpm install --frozen-lockfile --ignore-scripts
       - run: uv lock --check
-      - run: npm run lint
-      - run: npm run demo:ts
-      - run: npm run demo:py
+      - run: node node_modules/pnpm/bin/pnpm.mjs run lint
+      - run: node node_modules/pnpm/bin/pnpm.mjs run demo:ts
+      - run: node node_modules/pnpm/bin/pnpm.mjs run demo:py
       - run: uv run --locked ruff check --config python/base.toml python/project_presets_demo scripts/check-packages.py scripts/update-consumer.py
-      - run: npm test
+      - run: node node_modules/pnpm/bin/pnpm.mjs test

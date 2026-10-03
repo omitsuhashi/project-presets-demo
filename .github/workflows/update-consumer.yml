@@ -31,12 +31,13 @@ jobs:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           repository: omitsuhashi/project-presets-demo
-          ref: v1.5.0
+          ref: v2.0.0
           path: provider
           persist-credentials: false
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version: '24'
+          package-manager-cache: false
       - uses: astral-sh/setup-uv@94527f2e458b27549849d47d273a16bec83a01e9 # v7
         with:
           version: '0.11.7'
@@ -46,7 +47,11 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           PRESET_DIRECTORY: ${{ inputs.directory }}
           PRESET_VERSION: ${{ inputs.version }}
-        run: uv run --no-project --python 3.12 python provider/scripts/update-consumer.py --directory "consumer/$PRESET_DIRECTORY" --version "$PRESET_VERSION"
+        run: |
+          uv run --no-project --python 3.12 python provider/scripts/update-consumer.py --directory "consumer/$PRESET_DIRECTORY" --version "$PRESET_VERSION"
+          if [ -f "consumer/$PRESET_DIRECTORY/node_modules/project-presets-demo/scripts/apply-profile.mjs" ]; then
+            (cd "consumer/$PRESET_DIRECTORY" && node -p "require('node:path').dirname(require('node:module').createRequire(require('node:fs').realpathSync('node_modules/project-presets-demo/scripts/apply-profile.mjs')).resolve('pnpm')) + '/bin'") >> "$GITHUB_PATH"
+          fi
       - name: Run application tests
         env:
           APPLICATION_TESTS: ${{ inputs.test-command }}
@@ -67,9 +72,9 @@ jobs:
           profile="${state[0]}"
           version="${state[1]}"
           branch="codex/update-${profile}-${version}"
-          for path in package.json package-lock.json pyproject.toml uv.lock .project-preset.json .project-presets/ruff; do
-            if [ -e "$PRESET_DIRECTORY/$path" ]; then
-              git add -- "$PRESET_DIRECTORY/$path"
+          for path in package.json pnpm-lock.yaml package-lock.json npm-shrinkwrap.json pyproject.toml uv.lock .project-preset.json .project-presets/ruff; do
+            if [ -e "$PRESET_DIRECTORY/$path" ] || git ls-files --error-unmatch -- "$PRESET_DIRECTORY/$path" >/dev/null 2>&1; then
+              git add -A -- "$PRESET_DIRECTORY/$path"
             fi
           done
           if git diff --cached --quiet; then exit 0; fi
@@ -89,6 +94,6 @@ jobs:
 
           Validation: preset/lock consistency and lint; TypeScript typecheck and configured build/test scripts; additional caller-supplied application tests.
 
-          Review the release notes and project-specific changes before merging. Roll back by reverting this PR and running npm ci or uv sync --locked.
+          Review the release notes and project-specific changes before merging. Roll back by reverting this PR and running pnpm install --frozen-lockfile --ignore-scripts or uv sync --locked. For a revert to 1.x, use its npm lock and npm ci --allow-remote=root --ignore-scripts.
           BODY
           gh pr create --base "$BASE_BRANCH" --head "$branch" --title "Update $profile preset to $version" --body-file "$body"
