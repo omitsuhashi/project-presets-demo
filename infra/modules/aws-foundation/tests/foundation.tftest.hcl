@@ -45,3 +45,16 @@ run "reject_wildcard_secret_permissions" {
   variables { secret_arns = { TOKEN = "*" } }
   expect_failures = [var.secret_arns]
 }
+run "literal_secret_permissions" {
+  command = plan
+  variables {
+    secret_arns = {
+      TOKEN     = "arn:aws:secretsmanager:ap-northeast-1:123456789012:secret:demo-A1b2c3"
+      PARAMETER = "arn:aws:ssm:ap-northeast-1:123456789012:parameter/demo/token"
+    }
+  }
+  assert {
+    condition     = toset(jsondecode(aws_iam_role_policy.execution.policy).Statement[3].Resource) == toset(values(var.secret_arns))
+    error_message = "Allow the two specified secret resources without expanding their scope."
+  }
+}
