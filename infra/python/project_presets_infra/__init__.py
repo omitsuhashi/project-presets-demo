@@ -246,7 +246,15 @@ def plan(target, image=None, apply=False):
     tf(app, "plan", "-input=false", f"-var=image_uri={image}", "-lock-timeout=5m", "-out=deployment.tfplan")
     if apply:
         tf(app, "apply", "-input=false", "deployment.tfplan")
-        print(outputs(app)["url"])
+        values = outputs(app)
+        region = json.loads((target / "infra/.project-infra.json").read_text())["region"]
+        active = run("aws", "ecs", "describe-services", "--region", region, "--cluster", values["cluster_name"],
+                     "--services", values["service_name"], "--query", "services[0].taskDefinition", "--output", "text", capture=True)
+        deployed = run("aws", "ecs", "describe-task-definition", "--region", region, "--task-definition", active,
+                       "--query", "taskDefinition.containerDefinitions[?name=='app'].image | [0]", "--output", "text", capture=True)
+        if deployed != image:
+            raise ValueError("ECS did not keep the requested image; inspect the deployment rollback/events")
+        print(values["url"])
 
 
 def container_check(target, image=None):
@@ -334,7 +342,7 @@ def update(target, requested):
             raise ValueError(f"{folder}'s managed module reference was changed locally")
         value["module"]["preset"]["source"] = source(kind, selected)
         provider = value["terraform"]["required_providers"]["aws"]
-        if provider != {"source": "hashicorp/aws", "version": f"= {state['provider']}"}:
+        if provider.get("source") != "hashicorp/aws" or provider.get("version") not in {f"= {state['provider']}", f"= {PROVIDER}"}:
             raise ValueError(f"{folder}'s managed provider pin was changed locally")
         provider["version"] = f"= {PROVIDER}"
         pending.append((path, value))
@@ -397,7 +405,8 @@ def main():
                 value = json.loads((path / "preset.tf.json").read_text())
                 if value["module"]["preset"]["source"] != source(kind, state["release"]):
                     raise ValueError("Apply the pinned module reference")
-                if value["terraform"]["required_providers"]["aws"] != {"source": "hashicorp/aws", "version": f"= {state['provider']}"}:
+                provider = value["terraform"]["required_providers"]["aws"]
+                if provider.get("source") != "hashicorp/aws" or provider.get("version") != f"= {state['provider']}":
                     raise ValueError("Apply the managed provider pin")
                 tf(path, "init", "-upgrade", "-backend=false", "-input=false")
                 tf(path, "validate")

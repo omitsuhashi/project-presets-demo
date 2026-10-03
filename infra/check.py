@@ -58,6 +58,7 @@ def check(containers):
             # A foundation/provider conflict must stop before any managed file is replaced.
             app = consumer / "infra/app/preset.tf.json"
             value = json.loads(app.read_text())
+            value["terraform"]["required_providers"]["aws"]["configuration_aliases"] = []
             value["resource"] = {"terraform_data": {"custom": {"input": "keep me"}}}
             value["terraform"]["required_providers"]["aws"]["version"] = "custom"
             preset.write_json(app, value)
@@ -78,6 +79,7 @@ def check(containers):
                 input_bytes = inputs.read_bytes()
                 preset.update(consumer, "1.1.0")
                 assert json.loads(app.read_text())["resource"] == value["resource"]
+                assert json.loads(app.read_text())["terraform"]["required_providers"]["aws"]["configuration_aliases"] == []
                 assert inputs.read_bytes() == input_bytes
                 assert not old_docker.read_text().startswith("# old preset")
                 assert json.loads(app.read_text())["module"]["preset"]["source"].endswith("infra-aws-container-v1.1.0")
@@ -96,6 +98,12 @@ def check(containers):
                 preset.plan(operator)
                 assert any(f"-var=image_uri={image}" in call.args for call in native.call_args_list)
                 assert all("apply" not in call.args for call in native.call_args_list)
+            with patch.object(preset, "tf"), patch.object(preset, "outputs", return_value={"cluster_name": "demo", "service_name": "demo", "url": "http://demo.invalid"}), patch.object(preset, "run", side_effect=["task-arn", "old-image"]):
+                try:
+                    preset.plan(operator, image=image, apply=True)
+                    raise AssertionError("An ECS rollback was reported as successful deployment")
+                except ValueError as error:
+                    assert "requested image" in str(error)
             with patch.object(preset, "tf"), patch.object(preset.subprocess, "run", return_value=SimpleNamespace(returncode=2)):
                 try:
                     preset.foundation_plan(operator, require_unchanged=True)
