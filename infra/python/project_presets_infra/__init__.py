@@ -81,7 +81,10 @@ def init(target, args):
     application = target / ".project-preset.json"
     if args.profile is None and not application.exists():
         raise ValueError("Run an application preset --setup first, or use --profile with an existing app")
-    profile = args.profile or json.loads(application.read_text())["profile"]
+    configured = json.loads(application.read_text())["profile"] if application.exists() else None
+    if args.profile and configured and args.profile != configured:
+        raise ValueError("Infrastructure profile must match the existing application preset")
+    profile = args.profile or configured
     if profile not in PROFILES:
         raise ValueError("The first deployment demo supports typescript-hono and python-fastapi")
     manifest = "package.json" if profile.startswith("typescript-") else "pyproject.toml"

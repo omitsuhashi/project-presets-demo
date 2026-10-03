@@ -123,6 +123,12 @@ def check(containers):
             existing.mkdir()
             shutil.copy2(consumer / ("package.json" if profile.startswith("typescript-") else "pyproject.toml"), existing)
             (existing / "Dockerfile").write_text("custom Dockerfile\n")
+            mismatched = "typescript-next" if profile.startswith("typescript-") else "python-django"
+            preset.write_json(existing / ".project-preset.json", {"profile": mismatched})
+            result = subprocess.run([*cli, "init", "--directory", str(existing), "--profile", profile, "--name", "demo", "--repository", "example/consumer"], capture_output=True, text=True)
+            assert result.returncode == 1 and "must match" in result.stderr
+            assert not (existing / "infra").exists()
+            (existing / ".project-preset.json").unlink()
             run(*cli, "init", "--directory", existing, "--profile", profile, "--name", "demo", "--repository", "example/consumer")
             assert (existing / "Dockerfile").read_text() == "custom Dockerfile\n"
             result = subprocess.run([*cli, "bootstrap", "--directory", str(existing)], capture_output=True, text=True)
