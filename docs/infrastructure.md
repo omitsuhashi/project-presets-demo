@@ -89,7 +89,7 @@ bootstrap の生成ファイルを既定 branch に push すると、OIDC で CI
 infra_preset deploy
 ```
 
-foundation に未適用の変更があれば停止します。通常の流れは Docker build → ローカル `/health` → ECR push → ECR の digest を取得 → digest を指定した Terraform plan / apply です。ECS task definition と service は Terraform が一貫して管理します。ECR のタグは immutable、ECS は安定するまで待ち、deployment circuit breaker で失敗した配置を戻します。適用後に ECS が実際に使う image も照合し、rollback した場合は成功として扱いません。
+foundation に未適用の変更があれば停止します。通常の流れは Docker build → ローカル `/health` → ECR push → ECR の digest を取得 → digest を指定した Terraform plan / apply です。ECS task definition と service は Terraform が一貫して管理します。ECR のタグは immutable、ECS は安定するまで待ち、deployment circuit breaker で失敗した配置を戻します。適用後に ECS が実際に使う task definition の revision と image を照合し、rollback した場合は成功として扱いません。
 
 TypeScript の Docker build は利用側の `packageManager` に固定した pnpm と `pnpm-lock.yaml`、Python は `uv.lock` を使います。Python の実行イメージには開発用 preset / Ruff を入れません。AWS ECR の login token は一時 Docker config と標準入力で渡し、終了時にその config を削除します。
 

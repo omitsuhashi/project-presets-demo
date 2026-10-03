@@ -224,5 +224,6 @@ resource "aws_ecs_service" "app" {
 output "repository_url" { value = aws_ecr_repository.app.repository_url }
 output "cluster_name" { value = aws_ecs_cluster.app.name }
 output "service_name" { value = var.name }
+output "task_definition_arn" { value = try(aws_ecs_task_definition.app[0].arn, null) }
 output "deployed_image" { value = var.image_uri }
 output "url" { value = "${var.certificate_arn == null ? "http" : "https"}://${aws_lb.app.dns_name}" }
