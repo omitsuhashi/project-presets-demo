@@ -263,7 +263,14 @@ def container_check(target, image=None):
     image = image or f"preset-check:{uuid.uuid4().hex}"
     if built:
         run("docker", "build", "--platform", "linux/amd64", "--tag", image, ".", directory=target)
-    container = run("docker", "run", "--detach", "--publish", f"127.0.0.1::{variables['container_port']}", image, capture=True)
+    if variables["secret_arns"]:
+        # AWS secrets stay in ECS; the deployment's ALB/steady-state checks verify startup there.
+        if built:
+            run("docker", "image", "rm", image)
+        print("Container build passed; AWS secret-dependent health is checked by ECS/ALB during deployment")
+        return
+    environment = [f"--env={key}={value}" for key, value in variables["environment"].items()]
+    container = run("docker", "run", "--detach", *environment, "--publish", f"127.0.0.1::{variables['container_port']}", image, capture=True)
     try:
         port = run("docker", "port", container, str(variables["container_port"]), capture=True).split(":")[-1]
         url = f"http://127.0.0.1:{port}{variables['health_check_path']}"

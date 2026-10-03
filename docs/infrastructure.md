@@ -97,7 +97,7 @@ TypeScript の Docker build は利用側の `packageManager` に固定した pnp
 
 既定は HTTP です。HTTPS を使う場合は `infra/app/terraform.tfvars.json` の `certificate_arn` に同じリージョンの ACM 証明書 ARN を設定し、証明書のドメインを ALB へ向けます。HTTP は HTTPS に redirect します。private subnet が必要な場合は service module に既存 VPC / private subnet を渡し `assign_public_ip=false` にし、ECR / CloudWatch への VPC endpoint または NAT を利用側で用意します。foundation はデモ用ネットワークなので、既存ネットワークを使う構成は別の root で統合してください。
 
-secret の値は tfvars / Docker context に書かず、`secret_arns` に Secrets Manager / SSM の ARN を渡します。追加・削除時は execution role の権限も変わるため bootstrap を operator で適用します。カスタム KMS key を使う secret は利用側で `kms:Decrypt` を付与します。
+secret の値は tfvars / Docker context に書かず、`secret_arns` に Secrets Manager / SSM の ARN を渡します。追加・削除時は execution role の権限も変わるため bootstrap を operator で適用します。カスタム KMS key を使う secret は利用側で `kms:Decrypt` を付与します。ローカル検査は通常の `environment` を渡して実行し、AWS secret を読む権限は CI に付与しません。`secret_arns` があるアプリは build まで検証し、secret に依存する起動の health は実際の ECS / ALB で確認します。
 
 ## 配布側が更新する
 

@@ -128,7 +128,15 @@ def check(containers):
             result = subprocess.run([*cli, "bootstrap", "--directory", str(existing)], capture_output=True, text=True)
             assert result.returncode == 1 and "bootstrap --apply" in result.stderr
             if containers:
+                entry = consumer / ("server.ts" if profile.startswith("typescript-") else "main.py")
+                guard = "\nif (process.env.CUSTOM !== 'preserve') throw new Error('Missing configured environment');\n" if profile.startswith("typescript-") else "\nassert __import__('os').environ.get('CUSTOM') == 'preserve'\n"
+                entry.write_text(entry.read_text() + guard)
                 run(*cli, "container-check", "--directory", consumer)
+            configured["secret_arns"] = {"TOKEN": "arn:aws:secretsmanager:ap-northeast-1:123456789012:secret:demo"}
+            preset.write_json(inputs, configured)
+            with patch.object(preset, "run") as commands:
+                preset.container_check(consumer)
+                assert not any("aws" in call.args or "--detach" in call.args for call in commands.call_args_list)
         print("Infrastructure wheel, both consumer roots, conflict preservation and deferred bootstrap passed")
 
 

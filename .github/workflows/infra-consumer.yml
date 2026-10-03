@@ -118,7 +118,7 @@ jobs:
           cat > "$body" <<'BODY'
           Updates the independent AWS module references and managed AWS provider pin. Consumer variables and extra Terraform resources are preserved.
 
-          Validation: Terraform validate and a container health check. After AWS bootstrap, both foundation/app plans also run retaining the deployed image digest. The Actions run contains the plans; no resources were applied by this update job.
+          Validation: Terraform validate and container build/health (AWS secret-dependent startup is checked in ECS/ALB at deployment). After AWS bootstrap, both foundation/app plans also run retaining the deployed image digest. The Actions run contains the plans; no resources were applied by this update job.
 
           Review replacement/deletion effects before merging. Foundation changes require an operator to run the updated preset's `bootstrap --apply` first; CI refuses to deploy while the foundation plan has changes. After merge, the deployment workflow applies the app and builds a new image. Reverting Git does not restore deleted infrastructure or data. See the distribution repository's docs/infrastructure.md.
 
