@@ -47,7 +47,7 @@
     "@eslint/js": "9.39.5",
     "eslint": "9.39.5",
     "globals": "17.13.0",
-    "pnpm": "11.28.0",
+    "pnpm": "12.8.1",
     "typescript": "6.0.3",
     "typescript-eslint": "8.71.0"
   },
