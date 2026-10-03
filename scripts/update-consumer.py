@@ -7,13 +7,61 @@ import re
 import subprocess
 from pathlib import Path
 
+from release_presets import PROFILES, validate, version
+
 REPOSITORY = "omitsuhashi/project-presets-demo"
 
 
-def version(value):
-    if not re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", value):
-        raise ValueError("Use a stable version such as 1.1.0")
-    return tuple(map(int, value.split(".")))
+def select(profile, current, requested="", artifacts=None):
+    """Resolve a template version to its original, immutable artifact location."""
+    if requested:
+        version(requested)
+    if requested == current:
+        return {"version": current}
+    candidates = []
+    if artifacts:
+        path = artifacts / "release-manifest.json"
+        if path.exists():
+            candidates.append(validate(json.loads(path.read_text()))["profiles"][profile])
+        elif requested:
+            filename = (f"project-presets-demo-{requested}.tgz" if profile.startswith("typescript-")
+                        else f"project_presets_demo-{requested}-py3-none-any.whl")
+            candidates.append({"version": requested, "tag": f"v{requested}", "asset": filename})
+    else:
+        pages = json.loads(subprocess.check_output([
+            "gh", "api", f"repos/{REPOSITORY}/releases", "--paginate", "--slurp",
+        ], text=True))
+        releases = {item["tag_name"]: item for page in pages for item in page
+                    if not item["draft"] and not item["prerelease"] and re.fullmatch(r"v[0-9]+\.[0-9]+\.[0-9]+", item["tag_name"])}
+        for tag, release in releases.items():
+            names = {item["name"] for item in release["assets"]}
+            if "release-manifest.json" in names:
+                index = validate(json.loads(subprocess.check_output([
+                    "gh", "release", "download", tag, "--repo", REPOSITORY,
+                    "--pattern", "release-manifest.json", "--output", "-",
+                ], text=True)))
+                if index["tag"] != tag:
+                    raise ValueError("Release index and GitHub tag differ")
+                entry = index["profiles"][profile]
+                origin = releases.get(entry["tag"])
+                if origin and any(item["name"] == entry["asset"] for item in origin["assets"]):
+                    candidates.append(entry)
+            else:
+                candidate = tag[1:]
+                filename = (f"project-presets-demo-{candidate}.tgz" if profile.startswith("typescript-")
+                            else f"project_presets_demo-{candidate}-py3-none-any.whl")
+                if version(candidate) < (2, 2, 0) and filename in names:
+                    candidates.append({"version": candidate, "tag": tag, "asset": filename})
+    compatible = [entry for entry in candidates if (entry["version"] == requested if requested
+                  else version(entry["version"])[0] == version(current)[0] and version(entry["version"]) > version(current))]
+    if not compatible:
+        if requested:
+            raise ValueError(f"No published artifact for {profile} {requested}")
+        return {"version": current}
+    chosen = max(compatible, key=lambda entry: version(entry["version"]))
+    if any((entry["tag"], entry["asset"]) != (chosen["tag"], chosen["asset"]) for entry in compatible if entry["version"] == chosen["version"]):
+        raise ValueError("A template version must keep its original artifact URL")
+    return chosen
 
 
 def main():
@@ -24,31 +72,30 @@ def main():
     args = parser.parse_args()
     target = Path(args.directory).resolve()
     state = json.loads((target / ".project-preset.json").read_text())
-    current = version(state["release"])
-    selected = args.version.removeprefix("v")
-    if not selected:
-        tags = subprocess.check_output([
-            "gh", "api", f"repos/{REPOSITORY}/releases", "--paginate", "--jq",
-            ".[] | select(.draft == false and .prerelease == false) | .tag_name",
-        ], text=True).splitlines()
-        compatible = [tag.removeprefix("v") for tag in tags if re.fullmatch(r"v?[0-9]+\.[0-9]+\.[0-9]+", tag)]
-        compatible = [item for item in compatible if version(item)[0] == current[0] and version(item) >= current]
-        if not compatible:
-            raise ValueError("No compatible release found; major migrations require an explicit --version")
-        selected = max(compatible, key=version)
-    version(selected)
-    base = f"https://github.com/{REPOSITORY}/releases/download/v{selected}"
+    version(state["release"])
+    profile = state["profile"]
+    if profile not in PROFILES:
+        raise ValueError(f"Unsupported profile: {profile}")
     artifacts = args.artifacts.resolve() if args.artifacts else None
+    entry = select(profile, state["release"], args.version.removeprefix("v"), artifacts)
+    selected = entry["version"]
+    if selected == state["release"]:
+        if os.environ.get("GITHUB_OUTPUT"):
+            with Path(os.environ["GITHUB_OUTPUT"]).open("a") as output:
+                output.write("changed=false\n")
+        print(f"{profile} is already at {selected}; no update needed")
+        return
+    tag = entry["tag"]
+    base = f"https://github.com/{REPOSITORY}/releases/download/{tag}"
+    filename = entry["asset"]
+    source = (artifacts / filename).as_uri() if artifacts else f"{base}/{filename}"
 
     def run(*command):
         subprocess.run(command, cwd=target, check=True, env={**os.environ, "CI": "true", "pnpm_config_ignore_scripts": "true"})
 
-    profile = state["profile"]
     if profile in {"typescript-node", "typescript-hono", "typescript-next"}:
         if version(selected)[0] < 2:
             raise ValueError("Use the v1.5.0 updater for TypeScript 1.x; migrate with --version 2.0.0, or revert the migration PR")
-        filename = f"project-presets-demo-{selected}.tgz"
-        source = (artifacts / filename).as_uri() if artifacts else f"{base}/{filename}"
         run("npx", "--yes", "--ignore-scripts", "--allow-remote=root", "--package", source, "--", "project-presets", profile, "--setup", "--source", source)
         run("node", "node_modules/project-presets-demo/scripts/apply-profile.mjs", profile, "--check")
         manager = subprocess.check_output([
@@ -59,8 +106,6 @@ def main():
         run("node", manager, "--ignore-workspace", "run", "--if-present", "build")
         run("node", manager, "--ignore-workspace", "run", "--if-present", "test")
     elif profile in {"python-scripts", "python-django", "python-fastapi"}:
-        filename = f"project_presets_demo-{selected}-py3-none-any.whl"
-        source = (artifacts / filename).as_uri() if artifacts else f"{base}/{filename}"
         run("uv", "add", "--dev", f"project-presets-demo @ {source}")
         run("uv", "run", "--locked", "project-presets-python", profile, "--write", "--sync")
         run("uv", "run", "--locked", "project-presets-python", profile, "--check")
@@ -72,6 +117,9 @@ def main():
         raise ValueError(f"Unsupported profile: {profile}")
     if json.loads((target / ".project-preset.json").read_text())["release"] != selected:
         raise ValueError("The artifact version differs from the selected release; do not merge")
+    if os.environ.get("GITHUB_OUTPUT"):
+        with Path(os.environ["GITHUB_OUTPUT"]).open("a") as output:
+            output.write("changed=true\n")
     print(f"Updated {profile} from {state['release']} to {selected}; review and commit the diff")
 
 

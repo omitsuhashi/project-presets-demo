@@ -1,6 +1,6 @@
 {
   "name": "project-presets-demo",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "packageManager": "pnpm@11.28.0",
   "description": "Versioned framework, dependency, TypeScript and lint profiles",
   "type": "module",
@@ -25,10 +25,9 @@
   },
   "files": [
     "typescript",
-    "python",
-    "profiles.json",
-    "profiles",
-    "scripts/apply-profile.mjs"
+    "./profiles.json",
+    "scripts/apply-profile.mjs",
+    "python/project_presets_demo/update-presets.yml"
   ],
   "keywords": [
     "eslint",
@@ -41,7 +40,7 @@
     "test": "node scripts/check-demo.mjs && pnpm run test:packages",
     "demo:ts": "eslint --config examples/typescript/eslint.config.mjs examples/typescript/main.ts",
     "demo:py": "uv run --locked ruff check examples/python",
-    "test:packages": "uv run --no-project --python 3.12 python scripts/check-packages.py"
+    "test:packages": "uv run --no-project --python 3.12 python scripts/check-release-routing.py && uv run --no-project --python 3.12 python scripts/check-packages.py"
   },
   "dependencies": {
     "@eslint/js": "9.39.5",

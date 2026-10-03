@@ -1,0 +1,41 @@
+{
+  "tag": "v2.2.0",
+  "profiles": {
+    "typescript-node": {
+      "version": "2.2.0",
+      "tag": "v2.2.0",
+      "asset": "typescript-node-2.2.0.tgz",
+      "fingerprint": "7fb24d6bc2493f1a6dd6aaedae56d0b60bfffbab4ca95d2f9efea29ebb449e18"
+    },
+    "typescript-hono": {
+      "version": "2.2.0",
+      "tag": "v2.2.0",
+      "asset": "typescript-hono-2.2.0.tgz",
+      "fingerprint": "7413aa556da66cf9d43c7c32baf1cbb9c928eaa09fb29f1daec6fef987efde4b"
+    },
+    "typescript-next": {
+      "version": "2.2.0",
+      "tag": "v2.2.0",
+      "asset": "typescript-next-2.2.0.tgz",
+      "fingerprint": "bb5aba3eeec337638866b241cdf292e9bbedca37e18c49061c1b81a72f13c399"
+    },
+    "python-scripts": {
+      "version": "2.2.0",
+      "tag": "v2.2.0",
+      "asset": "project_presets_demo-2.2.0-1scripts-py3-none-any.whl",
+      "fingerprint": "8cbcbd3d9d86591265c914ef94af9c6322d3ab7086a2061c08f1f9f09fa4eed6"
+    },
+    "python-django": {
+      "version": "2.2.0",
+      "tag": "v2.2.0",
+      "asset": "project_presets_demo-2.2.0-1django-py3-none-any.whl",
+      "fingerprint": "c1ef38fb33667f25e5a01b04334bd70f8df5f5a5673201dd3b8ac5eed6b45801"
+    },
+    "python-fastapi": {
+      "version": "2.2.0",
+      "tag": "v2.2.0",
+      "asset": "project_presets_demo-2.2.0-1fastapi-py3-none-any.whl",
+      "fingerprint": "e1bd6e247b3f8d1fbcee3b5f70ecdc70602499b8a4df48a54365ed7c0913fa3b"
+    }
+  }
+}

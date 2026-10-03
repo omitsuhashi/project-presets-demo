@@ -1,5 +1,15 @@
 # Changelog
 
+## v2.2.0（未公開、全テンプレートの初版 2.2.0）
+
+- Node / Hono / Next、scripts / Django / FastAPI の版を独立管理し、1つのタグ・Release に変更したテンプレートだけを公開する。
+- `release-manifest.json` に全テンプレートの版・配布元タグ・ファイル名・変更検出用の入力ハッシュを記録。未変更の版と URL は引き継ぐ。
+- 共通の準備・build 処理で有効な入力を比較し、変更がなければ manifest を変更しない。Python wheel は標準の build tag でテンプレートを識別する。
+- 利用側は選択中のテンプレートの stable / major と成果物を確認し、同じ版ならファイル変更・再導入・PR 作成を行わない。2.1.0 以前の統合配布も引き続き利用できる。
+- 初回 setup は共通の公開タグに workflow と updater checkout を固定する。既存 workflow は保持するため、参照タグと `provider-ref` の移行が必要。
+
+Profile の依存版・lint ルールは 2.1.0 と同じ。公開タグの版とテンプレートの版は次回以降一致するとは限らない。
+
 ## 2.1.0
 
 - TypeScript / Python の bootstrap に `.github/workflows/update-presets.yml` の配置を追加。npm tarball と Python wheel に同じ workflow を含め、`npx` / `uvx` の `--setup` 一回で更新 PR の下地も作る。

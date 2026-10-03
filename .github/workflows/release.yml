@@ -21,25 +21,25 @@ jobs:
       - uses: astral-sh/setup-uv@94527f2e458b27549849d47d273a16bec83a01e9 # v7
         with:
           version: '0.11.7'
-      - name: Verify tag and package versions
-        run: |
-          uv run --no-project --python 3.12 python -c 'import json,os,re,tomllib; p=json.load(open("package.json")); t=tomllib.load(open("pyproject.toml","rb")); v=p["version"]; assert re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+",v); assert os.environ["GITHUB_REF_NAME"] == "v"+v == "v"+t["project"]["version"]'
+      - name: Verify publication tag and template inputs
+        env:
+          PUBLICATION_TAG: ${{ github.ref_name }}
+        run: uv run --no-project --python 3.12 python scripts/release_presets.py check --tag "$PUBLICATION_TAG"
       - run: npx --yes --ignore-scripts --package=pnpm@11.28.0 -- pnpm install --frozen-lockfile --ignore-scripts
       - run: uv lock --check
       - run: node node_modules/pnpm/bin/pnpm.mjs run lint
       - run: node node_modules/pnpm/bin/pnpm.mjs run demo:ts
       - run: node node_modules/pnpm/bin/pnpm.mjs run demo:py
-      - run: uv run --locked ruff check --config python/base.toml python/project_presets_demo scripts/check-packages.py scripts/update-consumer.py
+      - run: uv run --locked ruff check --config python/base.toml python/project_presets_demo scripts/check-packages.py scripts/update-consumer.py scripts/check-release-routing.py scripts/release_presets.py
       - run: node node_modules/pnpm/bin/pnpm.mjs test
-      - name: Build npm tarball and Python distributions
+      - name: Build changed templates and complete index
         run: |
-          uv build --out-dir dist
-          node node_modules/pnpm/bin/pnpm.mjs pack --config.ignore-scripts=true --pack-destination dist
+          uv run --no-project --python 3.12 python scripts/release_presets.py build --directory dist
           cd dist
-          sha256sum -- ./*.tgz ./*.whl ./*.tar.gz > SHA256SUMS
+          sha256sum -- ./* > SHA256SUMS
       - name: Publish complete release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release create "$GITHUB_REF_NAME" dist/* --verify-tag --draft --generate-notes --title "$GITHUB_REF_NAME"
-          gh release edit "$GITHUB_REF_NAME" --draft=false --latest
+          gh release edit "$GITHUB_REF_NAME" --draft=false --latest=false
