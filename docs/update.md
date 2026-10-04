@@ -20,10 +20,12 @@ marker に現在の Profile / 配布版が記録されています。未 commit 
 | 選び方 | 動作 |
 | --- | --- |
 | `--version 2.1.0` など明示 | 指定した公開版を選ぶ。major 更新は明示指定。TypeScript 1.x の適用には v1.5.0 の更新 script を使う |
-| `--version` を省略 | 現在と同じ major で、現在以上の最新 stable Release を選ぶ |
+| `--version` を省略 | 選択中のテンプレートの、現在と同じ major の最新 stable 版を選ぶ |
 | Profile の変更 | アプリの移行が必要。通常の更新 CLI は停止する |
 
-自動選択は draft / prerelease を採用しません。現在と最新版が同じでも再導入・再検証し、ファイル差分がなければ自動 PR は作られません。
+2.2.0 以降の更新 script は公開された `release-manifest.json` から対象テンプレートの版と元の配布先を選びます。draft / prerelease と配布物が欠けた Release は採用しません。同じテンプレート版なら、公開タグが進んでいてもファイル変更・再導入・PR 作成を行わず終了します。日常の CI 検証は案件側の workflow で行います。
+
+`--version 2.2.0` はテンプレートの版を指定します。公開タグの版ではありません。major 更新と downgrade は明示指定した時だけ行います。
 
 ## 2. 手動で更新 PR を作る
 
@@ -221,3 +223,30 @@ git restore --source=HEAD -- pyproject.toml uv.lock .project-preset.json .projec
 マージ後は更新 commit を revert する PR を作ります。merge commit の場合は Git の通常の merge revert 手順を使います。元の manifest・lock・marker・管理設定を揃えて戻し、依存を再導入して `--check` とアプリテストを実行します。Git の revert は DB migration やデータを復旧しないため、そちらは案件の復旧手順を使います。
 
 通常の一つの更新 commit なら、対象の SHA を確認して `PRESET_UPDATE_COMMIT` に設定した後、`git revert "$PRESET_UPDATE_COMMIT"` を使います。revert の変更も PR で検証・レビューします。
+
+## テンプレート別リリースへの移行
+
+v2.2.0 はこの変更で準備する未公開版です。公開後、既存の `update-consumer.yml@v2.1.0` を新しい updater へ移行します。古い updater はテンプレート別 manifest を読みません。`--setup` は案件所有の workflow を保持するため、以下を手動で変更して commit します。schedule・directory・アプリテストは案件の設定を保持します。
+
+```yaml
+jobs:
+  update:
+    uses: omitsuhashi/project-presets-demo/.github/workflows/update-consumer.yml@v2.2.0
+    with:
+      provider-ref: v2.2.0
+      version: ${{ inputs.version || '' }}
+```
+
+全テンプレートで同じ updater の公開タグを使います。未変更テンプレートは古い配布タグに残っていても、この updater が manifest から正しい成果物を取得します。以後の updater 自体の移行時も `uses` と `provider-ref` を同じ公開タグに揃えます。
+
+手動で使う場合も checkout を新しい公開タグへ更新します。
+
+```sh
+git -C ../preset-provider fetch origin tag v2.2.0
+git -C ../preset-provider switch --detach v2.2.0
+uv run --no-project --python 3.12 python ../preset-provider/scripts/update-consumer.py --directory .
+# major 移行または旧版への復旧にはテンプレート版を明示する。
+# uv run --no-project --python 3.12 python ../preset-provider/scripts/update-consumer.py --version 2.2.0
+```
+
+2.1.0 以前の統合配布も新しい updater で適用できます。Hono だけを更新した公開では Node / Next と Python の案件に更新 PR は作られません。

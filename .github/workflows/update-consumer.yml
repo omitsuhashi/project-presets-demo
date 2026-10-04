@@ -4,9 +4,13 @@ on:
   workflow_call:
     inputs:
       version:
-        description: Empty selects the latest stable release in the current major
+        description: Empty selects the latest stable release for the consumer's template in the current major
         type: string
         default: ''
+      provider-ref:
+        description: Pin the updater checkout to the same tag as this reusable workflow
+        type: string
+        required: true
       directory:
         type: string
         default: .
@@ -31,7 +35,7 @@ jobs:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           repository: omitsuhashi/project-presets-demo
-          ref: v2.1.0
+          ref: ${{ inputs.provider-ref }}
           path: provider
           persist-credentials: false
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
@@ -43,6 +47,7 @@ jobs:
           version: '0.11.7'
           python-version: '3.12'
       - name: Apply release and validate native locks
+        id: apply
         env:
           GH_TOKEN: ${{ github.token }}
           PRESET_DIRECTORY: ${{ inputs.directory }}
@@ -53,6 +58,7 @@ jobs:
             (cd "consumer/$PRESET_DIRECTORY" && node -p "require('node:path').dirname(require('node:module').createRequire(require('node:fs').realpathSync('node_modules/project-presets-demo/scripts/apply-profile.mjs')).resolve('pnpm')) + '/bin'") >> "$GITHUB_PATH"
           fi
       - name: Run application tests
+        if: steps.apply.outputs.changed == 'true'
         env:
           APPLICATION_TESTS: ${{ inputs.test-command }}
         working-directory: consumer/${{ inputs.directory }}
@@ -61,6 +67,7 @@ jobs:
             bash -e -o pipefail -c "$APPLICATION_TESTS"
           fi
       - name: Open a reviewable update PR
+        if: steps.apply.outputs.changed == 'true'
         working-directory: consumer
         env:
           GH_TOKEN: ${{ github.token }}

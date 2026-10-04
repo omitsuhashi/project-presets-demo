@@ -13,6 +13,7 @@ from functools import partial
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
+import release_presets
 import tomllib
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -62,8 +63,7 @@ def framework_check(consumer, kind, cli):
 
 manifest = json.loads((ROOT / "package.json").read_text())
 python = tomllib.loads((ROOT / "pyproject.toml").read_text())
-catalog = json.loads((ROOT / "profiles.json").read_text())
-assert manifest["version"] == python["project"]["version"]
+catalog = json.loads((ROOT / "profiles.json").read_text()) | json.loads((ROOT / "python/profiles.json").read_text())
 assert manifest["packageManager"] == "pnpm@" + manifest["dependencies"]["pnpm"]
 assert python["project"]["dependencies"] == ["ruff==" + catalog["python-scripts"]["devDependencies"]["ruff"]]
 current_ruff = catalog["python-scripts"]["devDependencies"]["ruff"]
@@ -107,7 +107,8 @@ with tempfile.TemporaryDirectory(prefix="project-presets-packages-") as director
                 selected = old_frameworks[name] if release == "1.0.0" else pin
                 text = text.replace(dependency, f"{name}=={selected}")
                 catalog[f"python-{kind}"]["dependencies"][name] = selected
-        (provider / "profiles.json").write_text(json.dumps(catalog))
+        (provider / "profiles.json").write_text(json.dumps({name: profile for name, profile in catalog.items() if profile["language"] == "typescript"}))
+        (provider / "python/profiles.json").write_text(json.dumps({name: profile for name, profile in catalog.items() if profile["language"] == "python"}))
         (provider / "pyproject.toml").write_text(text)
         if release == "2.0.0":
             with (provider / "python/project_presets_demo/config/base.toml").open("a") as file:
@@ -187,7 +188,8 @@ with tempfile.TemporaryDirectory(prefix="project-presets-packages-") as director
     git(legacy, "restore", ".")
     (legacy / "pnpm-lock.yaml").unlink()
     updater = [sys.executable, str(ROOT / "scripts/update-consumer.py"), "--artifacts", str(artifacts)]
-    run(legacy, *updater, "--version", "1.5.0", expected=1)
+    assert "no update needed" in run(legacy, *updater, "--version", "1.5.0")
+    assert (legacy / "package-lock.json").read_bytes() == old_lock
     run(legacy, *updater, "--version", "2.0.0")
     migrated = json.loads((legacy / "package.json").read_text())
     assert migrated["packageManager"] == manifest["packageManager"]
@@ -395,3 +397,70 @@ keep = "application-owned"
         assert json.loads((consumer / ".project-preset.json").read_text()) == state
         assert git(consumer, "status", "--porcelain") == ""
         print(f"PASS: {profile} rules, runtime without dev tools, framework update, overrides, drift rejection and revert")
+
+    # Build all template artifacts under one publication tag, then publish Hono alone.
+    scoped = temp / "scoped"
+    scoped.mkdir()
+    for name in ["package.json", "pyproject.toml", "README.md", "LICENSE", "profiles.json", "typescript", "python", "scripts", ".github"]:
+        source = ROOT / name
+        if source.is_dir():
+            shutil.copytree(source, scoped / name, ignore=shutil.ignore_patterns("__pycache__"))
+        else:
+            shutil.copy2(source, scoped / name)
+    # Reuse the installed native packer without installing a separate provider environment.
+    (scoped / "node_modules").symlink_to(ROOT / "node_modules", target_is_directory=True)
+    release_presets.prepare(scoped, "v2.2.0")
+    first = release_presets.check(scoped)
+    initial_dist = temp / "scoped-artifacts"
+    release_presets.build(scoped, initial_dist)
+    assert {path.name for path in initial_dist.iterdir()} == {"release-manifest.json"} | {entry["asset"] for entry in first["profiles"].values()}
+    for path in initial_dist.iterdir():
+        shutil.copy2(path, artifacts / path.name)
+    consumers = {}
+    for profile, entry in first["profiles"].items():
+        consumer = temp / f"scoped-{profile}"
+        init(consumer)
+        source = remote + "/" + entry["asset"] if profile.startswith("typescript-") else (artifacts / entry["asset"]).as_uri()
+        cli = (["npx", "--yes", "--allow-remote=root", "--ignore-scripts", source, profile]
+               if profile.startswith("typescript-") else ["uvx", "--python", "3.12", "--from", source, "project-presets-python", profile])
+        preview = json.loads(run(temp, *cli, str(consumer)))
+        assert preview["source"] == f"https://github.com/omitsuhashi/project-presets-demo/releases/download/v2.2.0/{entry['asset']}"
+        run(temp, *cli, str(consumer), "--setup", "--source", source)
+        run(temp, *cli, str(consumer), "--check", "--source", source)
+        if profile.startswith("typescript-"):
+            (consumer / "main.ts").write_text("export const answer: number = 42;\n")
+            pnpm(consumer, "exec", "eslint", ".")
+            pnpm(consumer, "exec", "tsc", "--noEmit")
+        else:
+            (consumer / "main.py").write_text("VALUE = 42\n")
+            run(consumer, "uv", "run", "--locked", "ruff", "check", ".")
+        automation = (consumer / ".github/workflows/update-presets.yml").read_text()
+        assert "update-consumer.yml@v2.2.0" in automation and "provider-ref: v2.2.0" in automation
+        other = ("typescript-node" if profile == "typescript-hono" else "typescript-hono") if profile.startswith("typescript-") else ("python-django" if profile == "python-scripts" else "python-scripts")
+        run(temp, *cli[:-1], other, str(consumer), "--write", expected=1)
+        commit(consumer, "Adopt independently versioned template")
+        consumers[profile] = consumer
+    catalog_path = scoped / "profiles.json"
+    scoped_catalog = json.loads(catalog_path.read_text())
+    scoped_catalog["typescript-hono"]["framework"] = "Hono on Node.js 24"
+    catalog_path.write_text(json.dumps(scoped_catalog))
+    assert release_presets.prepare(scoped, "v2.3.0") == ["typescript-hono"]
+    second = release_presets.check(scoped)
+    second_dist = temp / "hono-artifacts"
+    release_presets.build(scoped, second_dist)
+    assert {path.name for path in second_dist.iterdir()} == {"release-manifest.json", "typescript-hono-2.2.1.tgz"}
+    for path in second_dist.iterdir():
+        shutil.copy2(path, artifacts / path.name)
+    for profile, consumer in consumers.items():
+        run(consumer, sys.executable, str(ROOT / "scripts/update-consumer.py"), "--artifacts", str(artifacts))
+        state = json.loads((consumer / ".project-preset.json").read_text())
+        if profile == "typescript-hono":
+            assert state["release"] == "2.2.1"
+            assert git(consumer, "status", "--porcelain")
+            commit(consumer, "Update Hono alone")
+            run(consumer, sys.executable, str(ROOT / "scripts/update-consumer.py"), "--artifacts", str(artifacts))
+        else:
+            assert second["profiles"][profile] == first["profiles"][profile]
+            assert state["release"] == "2.2.0"
+        assert git(consumer, "status", "--porcelain") == "", profile
+    print("PASS: six installable template artifacts, one tag, Hono-only rebuild/update and byte-unchanged consumers")

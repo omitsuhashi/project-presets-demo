@@ -1,5 +1,15 @@
 # Changelog
 
+## v2.2.0（未公開、全テンプレートの初版 2.2.0）
+
+- Node / Hono / Next、scripts / Django / FastAPI の版を独立管理し、1つのタグ・Release に変更したテンプレートだけを公開する。
+- `release-manifest.json` に全テンプレートの版・配布元タグ・ファイル名・変更検出用の入力ハッシュを記録。未変更の版と URL は引き継ぐ。
+- 共通の準備・build 処理で有効な入力を比較し、変更がなければ manifest を変更しない。Python wheel は標準の build tag でテンプレートを識別する。
+- 利用側は選択中のテンプレートの stable / major と成果物を確認し、同じ版ならファイル変更・再導入・PR 作成を行わない。2.1.0 以前の統合配布も引き続き利用できる。
+- 初回 setup は共通の公開タグに workflow と updater checkout を固定する。既存 workflow は保持するため、参照タグと `provider-ref` の移行が必要。
+
+Profile の依存版・lint ルールは 2.1.0 と同じ。公開タグの版とテンプレートの版は次回以降一致するとは限らない。
+
 ## infra-aws-container-v1.0.0
 
 - アプリ用の版から独立した `project-presets-infra` wheel と AWS Terraform module を GitHub Release / 固定タグで配布。
@@ -7,7 +17,6 @@
 - operator の `bootstrap --apply`、image digest を Terraform で管理する deploy、コンテナの health check、稼働 image を保持する plan を追加。
 - module / provider / 管理 Dockerfile を保持チェック付きで更新して PR 化。利用側の変数・追加 resource・独自 Dockerfile を保持し、foundation の権限変更は operator が適用。
 - Terraform mock、配布 wheel、設定更新と競合、Hono / FastAPI の非 root コンテナを AWS 認証なしで CI 検証。実 AWS への配置・IAM 許可判定は認証準備後に検証する。
-
 
 ## 2.1.0
 

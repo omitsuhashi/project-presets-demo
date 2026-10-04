@@ -44,7 +44,7 @@ uvx --python 3.12 \
 | `python-django` | Python 3.12 / Django | Django 6.1.1、Ruff の `DJ` ルール、service 用の print 検査 |
 | `python-fastapi` | Python 3.12 / HTTP API | FastAPI 0.142.2、Uvicorn 0.54.0、Ruff の `FAST` ルール、`Annotated` を推奨 |
 
-[profiles.json](profiles.json) と各パッケージの manifest を CI で照合します。Next.js と `eslint-config-next` も同じ版に揃え、代表アプリで検証します。
+[TypeScript catalog](profiles.json) / [Python catalog](python/profiles.json) と各パッケージの manifest を CI で照合します。Next.js と `eslint-config-next` も同じ版に揃え、代表アプリで検証します。
 
 ESLint 9 は [2026-08-06 に EOL](https://eslint.org/version-support/) です。Next.js の React plugin の peer 対応に合わせて、このデモでは 9 を固定しています。本運用に昇格する前に、保守中のツールを使える組み合わせへ移行してください。このデモの検証対象と、組織のサポート範囲は別に決めます。
 
@@ -82,3 +82,5 @@ CI では manifest / catalog の整合性、Hono の応答、Next.js の build�
 旧 Python submodule の設定パスは互換用に残しています。新規導入は wheel を使い、移行方法は [導入手順](docs/install.md#既存案件) を参照してください。
 
 MIT License.
+
+2.2.0 からは6テンプレートの版を独立して管理します（現時点では未公開）。公開は1回につき `vX.Y.Z` タグ1つと Release 1つです。`release-manifest.json` が各テンプレートの版・元の配布先を記録し、変更したテンプレートだけ build します。利用側は自分のテンプレートが同じ版なら終了します。[公開手順](docs/publish.md) と [既存 workflow の移行](docs/update.md#テンプレート別リリースへの移行) を参照してください。

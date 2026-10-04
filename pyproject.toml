@@ -1,6 +1,6 @@
 [project]
 name = "project-presets-demo"
-version = "2.1.0"
+version = "2.2.0"
 description = "Versioned Python project presets and update CLI"
 readme = "README.md"
 requires-python = ">=3.12"

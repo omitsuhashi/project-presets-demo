@@ -1,0 +1,26 @@
+{
+  "python-scripts": {
+    "language": "python",
+    "runtime": "Python 3.12",
+    "framework": null,
+    "ruff": "python/scripts.toml",
+    "requirements": "profiles/python-scripts/requirements-dev.txt",
+    "devDependencies": { "ruff": "0.16.10" }
+  },
+  "python-django": {
+    "language": "python",
+    "runtime": "Python 3.12",
+    "framework": "Django",
+    "ruff": "python/project_presets_demo/config/django.toml",
+    "dependencies": { "django": "6.1.1" },
+    "devDependencies": { "ruff": "0.16.10" }
+  },
+  "python-fastapi": {
+    "language": "python",
+    "runtime": "Python 3.12",
+    "framework": "FastAPI / Uvicorn",
+    "ruff": "python/project_presets_demo/config/fastapi.toml",
+    "dependencies": { "fastapi": "0.142.2", "uvicorn": "0.54.0" },
+    "devDependencies": { "ruff": "0.16.10" }
+  }
+}

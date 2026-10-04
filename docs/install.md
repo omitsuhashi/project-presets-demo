@@ -161,7 +161,7 @@ PR を作る前に lint / 型チェック / `package.json` の build / test、Dj
 
 ## 既存案件
 
-導入用 branch で、既存の manifest とアプリテストを使います。既存設定の参照を共通設定に統合してから、上記の一時実行コマンドに `--adopt` を付けて実行します。管理対象の依存が未導入なら CLI が追加します。既存の版が競合する場合は、[profiles.json](../profiles.json) の exact pin に合わせてから登録します。Python の既存依存を揃える時も `uv add` で manifest / lock を更新します。
+導入用 branch で、既存の manifest とアプリテストを使います。既存設定の参照を共通設定に統合してから、上記の一時実行コマンドに `--adopt` を付けて実行します。管理対象の依存が未導入なら CLI が追加します。既存の版が競合する場合は、[TypeScript catalog](../profiles.json) / [Python catalog](../python/profiles.json) の exact pin に合わせてから登録します。Python の既存依存を揃える時も `uv add` で manifest / lock を更新します。
 
 既存設定を保持したまま登録するには、選んだ Profile で `--adopt --setup` を使います。その後に `--check`、lint、型チェック、アプリのテストを実行して導入 PR をレビューします。`--adopt` は依存の競合や Profile 切替を強制するオプションではありません。
 
@@ -189,3 +189,22 @@ uv run --locked project-presets-python python-django --check
 通常は実行した CLI と同じ版の GitHub Release を登録します。別の配布先やローカル artifact を使う場合は `--source URL` を指定します。TypeScript は HTTP(S) / `file:` / Git、Python は HTTP(S) / `file://` の wheel URL を使えます。既存の公式以外の配布元は保持されるため、そこから別の版へ更新する場合は新しい配布元を明示してください。公開 URL は固定版を使い、実行 CLI と配布物の版を揃えます。
 
 参照: [npm exec / npx](https://docs.npmjs.com/cli/v12/commands/npm-exec/)、[pnpm install](https://pnpm.io/cli/install)、[pnpm import](https://pnpm.io/cli/import)、[uvx](https://docs.astral.sh/uv/guides/tools/)、[uv の依存管理](https://docs.astral.sh/uv/concepts/projects/dependencies/)、[Ruff の継承と上書き](https://docs.astral.sh/ruff/configuration/)。
+
+## テンプレート別の配布 URL
+
+上記の 2.1.0 は公開済みの統合配布です。v2.2.0 はこの変更で準備する未公開版で、PR のマージだけでは公開されません。
+
+公開後は Release の `release-manifest.json` の `profiles[PROFILE]` から `version`・`tag`・`asset` を読み、`https://github.com/omitsuhashi/project-presets-demo/releases/download/{tag}/{asset}` を使います。最新 Release のタグに置き換えないでください。未変更テンプレートは元の配布 URL のままです。
+
+初回 v2.2.0 の例:
+
+```sh
+npx --yes --ignore-scripts --allow-remote=root \
+  https://github.com/omitsuhashi/project-presets-demo/releases/download/v2.2.0/typescript-hono-2.2.0.tgz \
+  typescript-hono my-hono --setup
+uvx --python 3.12 \
+  --from https://github.com/omitsuhashi/project-presets-demo/releases/download/v2.2.0/project_presets_demo-2.2.0-1django-py3-none-any.whl \
+  project-presets-python python-django my-django --setup
+```
+
+成果物は選択したテンプレートだけに対応します。版番号を6つ揃える必要はありません。
