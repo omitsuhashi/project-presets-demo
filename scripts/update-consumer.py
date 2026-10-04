@@ -7,7 +7,7 @@ import re
 import subprocess
 from pathlib import Path
 
-from release_presets import PROFILES, validate, version
+from release_manifest import PROFILES, validate, version
 
 REPOSITORY = "omitsuhashi/project-presets-demo"
 

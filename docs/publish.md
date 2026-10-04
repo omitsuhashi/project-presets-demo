@@ -32,15 +32,23 @@ pnpm install --frozen-lockfile --ignore-scripts
 
 | 変更 | 更新する場所 |
 | --- | --- |
-| TypeScript / ESLint / Hono / Next / React / 型定義 | `profiles.json` の pin、`package.json` の依存または検証用 devDependencies、該当する設定 |
+| TypeScript / ESLint / Hono / Next / React / 型定義 | `package.json` の依存または検証用 devDependencies、該当する設定 |
 | pnpm | `package.json` の dependencies.pnpm / packageManager、CI と手順書の固定版 |
-| Ruff | `pyproject.toml` の依存、`python/profiles.json` の全 Profile、互換用 requirements-dev.txt |
-| Django / FastAPI / Uvicorn | `pyproject.toml` の optional-dependencies と `python/profiles.json` の対象 Profile |
+| Ruff | `pyproject.toml` の依存 |
+| Django / FastAPI / Uvicorn | `pyproject.toml` の optional-dependencies |
+| Profile の採用依存・用途・設定参照 | `profiles/definitions.json`（依存名を指定し、版は native manifest から取得） |
 | TypeScript 設定 | `typescript/` |
 | Python 設定 | `python/project_presets_demo/config/` |
 | CLI / 更新処理 | 各 CLI、`scripts/update-consumer.py`、共通 workflow テンプレート |
 
 Next と eslint-config-next は同じ版に揃えます。framework の Python / Node 要件とアプリへの非互換性も確認します。lock の更新には pnpm / uv の通常の操作を使い、文字列置換しません。配布元 lock 自体は利用側にコピーされません。
+
+編集後、配布用 catalog と互換用 requirements を生成します。`profiles.json` / `python/profiles.json` / `profiles/python-scripts/requirements-dev.txt` は生成結果として commit します。
+
+```sh
+uv run --no-project --python 3.12 python scripts/catalog.py generate
+uv run --no-project --python 3.12 python scripts/catalog.py check
+```
 
 ## 変更したテンプレートだけ版を準備する
 
@@ -63,7 +71,7 @@ uv lock --check
 pnpm run lint
 pnpm run demo:ts
 pnpm run demo:py
-uv run --locked ruff check --config python/base.toml python/project_presets_demo scripts/check-packages.py scripts/update-consumer.py scripts/check-release-routing.py scripts/release_presets.py
+uv run --locked ruff check --config python/base.toml python/project_presets_demo scripts tests
 pnpm test
 uv run --no-project --python 3.12 python scripts/release_presets.py check
 git diff --check

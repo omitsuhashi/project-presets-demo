@@ -1,0 +1,86 @@
+{
+  "typescript-node": {
+    "language": "typescript",
+    "runtime": "Node.js 24",
+    "framework": null,
+    "eslint": "node",
+    "tsconfig": "node",
+    "dependencies": [],
+    "devDependencies": [
+      "eslint",
+      "typescript",
+      "@types/node"
+    ]
+  },
+  "typescript-hono": {
+    "language": "typescript",
+    "runtime": "Node.js 24",
+    "framework": "Hono on Node.js",
+    "eslint": "hono",
+    "tsconfig": "node",
+    "dependencies": [
+      "hono",
+      "@hono/node-server"
+    ],
+    "devDependencies": [
+      "eslint",
+      "typescript",
+      "@types/node"
+    ]
+  },
+  "typescript-next": {
+    "language": "typescript",
+    "runtime": "Node.js 24",
+    "framework": "Next.js App Router",
+    "eslint": "next",
+    "tsconfig": "next",
+    "dependencies": [
+      "next",
+      "react",
+      "react-dom"
+    ],
+    "devDependencies": [
+      "eslint",
+      "typescript",
+      "eslint-config-next",
+      "@types/node",
+      "@types/react",
+      "@types/react-dom"
+    ]
+  },
+  "python-scripts": {
+    "language": "python",
+    "runtime": "Python 3.12",
+    "framework": null,
+    "ruff": "python/scripts.toml",
+    "requirements": "profiles/python-scripts/requirements-dev.txt",
+    "devDependencies": [
+      "ruff"
+    ]
+  },
+  "python-django": {
+    "language": "python",
+    "runtime": "Python 3.12",
+    "framework": "Django",
+    "ruff": "python/project_presets_demo/config/django.toml",
+    "dependencies": [
+      "django"
+    ],
+    "devDependencies": [
+      "ruff"
+    ]
+  },
+  "python-fastapi": {
+    "language": "python",
+    "runtime": "Python 3.12",
+    "framework": "FastAPI / Uvicorn",
+    "ruff": "python/project_presets_demo/config/fastapi.toml",
+    "dependencies": [
+      "fastapi",
+      "uvicorn"
+    ],
+    "devDependencies": [
+      "ruff"
+    ]
+  }
+}

@@ -13,10 +13,11 @@ import tempfile
 import zipfile
 from pathlib import Path
 
+import catalog as profile_catalog
 import tomllib
+from release_manifest import PROFILES, asset, validate, version
 
 ROOT = Path(__file__).resolve().parent.parent
-PROFILES = ("typescript-node", "typescript-hono", "typescript-next", "python-scripts", "python-django", "python-fastapi")
 
 
 def npm_dependencies(package, profile):
@@ -24,45 +25,20 @@ def npm_dependencies(package, profile):
             if profile != "typescript-next" or name not in {"@eslint/js", "globals", "typescript-eslint"}}
 
 
-def version(value):
-    if not isinstance(value, str) or not re.fullmatch(r"(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)", value):
-        raise ValueError("Use a stable version such as 2.2.0")
-    return tuple(map(int, value.split(".")))
-
-
-def asset(profile, release):
-    version(release)
-    if profile not in PROFILES:
-        raise ValueError(f"Unsupported profile: {profile}")
-    return (f"{profile}-{release}.tgz" if profile.startswith("typescript-")
-            else f"project_presets_demo-{release}-1{profile.removeprefix('python-')}-py3-none-any.whl")
-
-
-def validate(index):
-    version(index["tag"].removeprefix("v"))
-    if not index["tag"].startswith("v") or set(index["profiles"]) != set(PROFILES):
-        raise ValueError("A release index must have one vX.Y.Z tag and all six templates")
-    for profile, entry in index["profiles"].items():
-        version(entry["tag"].removeprefix("v"))
-        if (not entry["tag"].startswith("v") or version(entry["tag"][1:]) > version(index["tag"][1:])
-                or entry["asset"] != asset(profile, entry["version"])
-                or not re.fullmatch(r"[a-f0-9]{64}", entry["fingerprint"])):
-            raise ValueError(f"Invalid release entry: {profile}")
-    return index
-
-
 def fingerprints(root=ROOT):
+    profile_catalog.check(root)
     npm = json.loads((root / "package.json").read_text())
     python = tomllib.loads((root / "pyproject.toml").read_text())
     catalog = json.loads((root / "profiles.json").read_text()) | json.loads((root / "python/profiles.json").read_text())
     result = {}
     for profile in PROFILES:
         descriptor = catalog[profile]
-        files = ["scripts/release_presets.py", "scripts/update-consumer.py", ".github/workflows/update-consumer.yml",
+        files = ["scripts/release_presets.py", "scripts/release_manifest.py", "scripts/update-consumer.py", ".github/workflows/update-consumer.yml",
                  "python/project_presets_demo/update-presets.yml"]
         if profile.startswith("typescript-"):
             kind = descriptor["tsconfig"]
             files += ["scripts/apply-profile.mjs", f"typescript/tsconfig-{kind}.json", f"typescript/{kind}.js"]
+            files += [str(path.relative_to(root)) for path in sorted((root / "scripts/presets").glob("*.mjs"))]
             if kind == "node":
                 files += ["typescript/base.js"]
             native = {key: npm[key] for key in ("name", "dependencies", "engines", "packageManager")}
@@ -70,7 +46,7 @@ def fingerprints(root=ROOT):
             if kind == "next":
                 native["peerDependencies"] = npm["peerDependencies"]
         else:
-            files += ["python/project_presets_demo/__init__.py"]
+            files += [str(path.relative_to(root)) for path in sorted((root / "python/project_presets_demo").glob("*.py"))]
             config = root / "python/project_presets_demo/config" / (profile.removeprefix("python-") + ".toml")
             while True:
                 files.append(str(config.relative_to(root)))
@@ -154,7 +130,7 @@ def build(root, destination):
                 descriptor = json.loads((stage / "profiles.json").read_text())[profile]
                 kind = descriptor["tsconfig"]
                 package["files"] = [f"typescript/{kind}.js", f"typescript/tsconfig-{kind}.json", "./profiles.json",
-                                    "scripts/apply-profile.mjs", "python/project_presets_demo/update-presets.yml", "preset-release.json"]
+                                    "scripts/apply-profile.mjs", "scripts/presets", "python/project_presets_demo/update-presets.yml", "preset-release.json"]
                 if kind == "node":
                     package["files"].append("typescript/base.js")
                 package["exports"] = {".": f"./typescript/{kind}.js", f"./{descriptor['eslint']}": f"./typescript/{kind}.js",

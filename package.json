@@ -27,6 +27,7 @@
     "typescript",
     "./profiles.json",
     "scripts/apply-profile.mjs",
+    "scripts/presets",
     "python/project_presets_demo/update-presets.yml"
   ],
   "keywords": [
@@ -36,8 +37,9 @@
     "ruff"
   ],
   "scripts": {
-    "lint": "eslint typescript scripts eslint.config.mjs examples/typescript",
-    "test": "node scripts/check-demo.mjs && pnpm run test:packages",
+    "lint": "eslint typescript scripts tests eslint.config.mjs examples/typescript",
+    "test": "pnpm run test:plans && node scripts/check-demo.mjs && pnpm run test:packages",
+    "test:plans": "node --test tests/preset-plan.test.mjs && uv run --no-project --python 3.12 python -m unittest discover -s tests -p 'test_*.py'",
     "demo:ts": "eslint --config examples/typescript/eslint.config.mjs examples/typescript/main.ts",
     "demo:py": "uv run --locked ruff check examples/python",
     "test:packages": "uv run --no-project --python 3.12 python scripts/check-release-routing.py && uv run --no-project --python 3.12 python scripts/check-packages.py"
