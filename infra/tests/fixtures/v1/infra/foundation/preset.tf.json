@@ -1,0 +1,73 @@
+{
+  "terraform": {
+    "required_version": ">= 1.10, < 2.0",
+    "required_providers": {
+      "aws": {
+        "source": "hashicorp/aws",
+        "version": "= 6.67.0"
+      }
+    }
+  },
+  "provider": {
+    "aws": {
+      "region": "${var.region}",
+      "default_tags": [
+        {
+          "tags": {
+            "Project": "${var.name}"
+          }
+        }
+      ]
+    }
+  },
+  "variable": {
+    "name": {
+      "type": "string"
+    },
+    "github_repository": {
+      "type": "string"
+    },
+    "github_branch": {
+      "type": "string"
+    },
+    "existing_oidc_provider_arn": {
+      "type": "string"
+    },
+    "secret_arns": {
+      "type": "map(string)"
+    },
+    "region": {
+      "type": "string"
+    }
+  },
+  "module": {
+    "preset": {
+      "source": "git::https://github.com/omitsuhashi/project-presets-demo.git//infra/modules/aws-foundation?ref=infra-aws-container-v1.0.0",
+      "name": "${var.name}",
+      "github_repository": "${var.github_repository}",
+      "github_branch": "${var.github_branch}",
+      "existing_oidc_provider_arn": "${var.existing_oidc_provider_arn}",
+      "secret_arns": "${var.secret_arns}"
+    }
+  },
+  "output": {
+    "state_bucket": {
+      "value": "${module.preset.state_bucket}"
+    },
+    "deployment_role_arn": {
+      "value": "${module.preset.deployment_role_arn}"
+    },
+    "execution_role_arn": {
+      "value": "${module.preset.execution_role_arn}"
+    },
+    "task_role_arn": {
+      "value": "${module.preset.task_role_arn}"
+    },
+    "vpc_id": {
+      "value": "${module.preset.vpc_id}"
+    },
+    "subnet_ids": {
+      "value": "${module.preset.subnet_ids}"
+    }
+  }
+}

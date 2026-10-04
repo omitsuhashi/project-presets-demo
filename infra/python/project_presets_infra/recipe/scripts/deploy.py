@@ -10,7 +10,7 @@ import urllib.request
 import uuid
 from pathlib import Path
 
-from .native import foundation_plan, identity, outputs, run, tf, write_json
+from native import foundation_plan, identity, outputs, run, tf, write_json
 
 
 def plan(target, image=None, apply=False):
@@ -30,7 +30,7 @@ def plan(target, image=None, apply=False):
 
 def verify_deployment(target, image):
     values = outputs(target / "infra/app")
-    region = json.loads((target / "infra/.project-infra.json").read_text())["region"]
+    region = json.loads((target / "infra/foundation/terraform.tfvars.json").read_text())["region"]
     active = run("aws", "ecs", "describe-services", "--region", region, "--cluster", values["cluster_name"],
                  "--services", values["service_name"], "--query", "services[0].taskDefinition", "--output", "text", capture=True)
     if active != values["task_definition_arn"]:

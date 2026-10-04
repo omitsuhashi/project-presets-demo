@@ -1,0 +1,65 @@
+# Project-owned workflow. Review changes here alongside the application and Terraform roots.
+name: Deploy AWS app
+on:
+  push:
+    branches: [__BRANCH__]
+  workflow_dispatch:
+permissions:
+  contents: read
+  id-token: write
+concurrency:
+  group: aws-infrastructure
+  cancel-in-progress: false
+jobs:
+  configuration:
+    runs-on: ubuntu-latest
+    outputs:
+      ready: ${{ steps.config.outputs.ready }}
+      role: ${{ steps.config.outputs.role }}
+      region: ${{ steps.config.outputs.region }}
+      account: ${{ steps.config.outputs.account }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+      - id: config
+        name: Read project bootstrap configuration
+        run: |
+          python3 - <<'PY'
+          import json, os, re
+          from pathlib import Path
+          config = Path('infra/aws.json')
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
+              if not config.exists():
+                  output.write('ready=false\n')
+                  with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as summary:
+                      summary.write('Run python3 infra/scripts/infra.py bootstrap --apply with operator credentials, then commit the generated configuration. No deployment was attempted.\n')
+              else:
+                  data = json.loads(config.read_text())
+                  assert re.fullmatch(r'[0-9]{12}', data['account'])
+                  assert re.fullmatch(r'[a-z]{2}-[a-z]+-[1-9][0-9]*', data['region'])
+                  assert re.fullmatch(r'arn:aws:iam::' + data['account'] + r':role/[A-Za-z0-9+=,.@_/-]+', data['role'])
+                  output.write('ready=true\n')
+                  for key in ['account', 'role', 'region']:
+                      output.write(f'{key}={data[key]}\n')
+          PY
+  deploy:
+    needs: configuration
+    if: needs.configuration.outputs.ready == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+      - uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3
+        with:
+          terraform_version: '1.16.5'
+          terraform_wrapper: false
+      - uses: aws-actions/configure-aws-credentials@cabfdba3510de1431bac9dba27511d97497fc100 # v5
+        with:
+          role-to-assume: ${{ needs.configuration.outputs.role }}
+          aws-region: ${{ needs.configuration.outputs.region }}
+          allowed-account-ids: ${{ needs.configuration.outputs.account }}
+          role-session-name: app-${{ github.run_id }}
+      - name: Build, check and deploy an immutable image with the project's scripts
+        run: python3 infra/scripts/infra.py deploy

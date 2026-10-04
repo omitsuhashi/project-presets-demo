@@ -1,0 +1,113 @@
+{
+  "terraform": {
+    "required_version": ">= 1.10, < 2.0",
+    "required_providers": {
+      "aws": {
+        "source": "hashicorp/aws",
+        "version": "= 6.67.0"
+      }
+    }
+  },
+  "provider": {
+    "aws": {
+      "region": "${var.region}",
+      "default_tags": [
+        {
+          "tags": {
+            "Project": "${var.name}"
+          }
+        }
+      ]
+    }
+  },
+  "variable": {
+    "name": {
+      "type": "string"
+    },
+    "vpc_id": {
+      "type": "string"
+    },
+    "subnet_ids": {
+      "type": "list(string)"
+    },
+    "execution_role_arn": {
+      "type": "string"
+    },
+    "task_role_arn": {
+      "type": "string"
+    },
+    "image_uri": {
+      "type": "string"
+    },
+    "container_port": {
+      "type": "number"
+    },
+    "health_check_path": {
+      "type": "string"
+    },
+    "environment": {
+      "type": "map(string)"
+    },
+    "secret_arns": {
+      "type": "map(string)"
+    },
+    "cpu": {
+      "type": "number"
+    },
+    "memory": {
+      "type": "number"
+    },
+    "desired_count": {
+      "type": "number"
+    },
+    "assign_public_ip": {
+      "type": "bool"
+    },
+    "certificate_arn": {
+      "type": "string"
+    },
+    "region": {
+      "type": "string"
+    }
+  },
+  "module": {
+    "preset": {
+      "source": "git::https://github.com/omitsuhashi/project-presets-demo.git//infra/modules/aws-container-service?ref=infra-aws-container-v1.0.0",
+      "name": "${var.name}",
+      "vpc_id": "${var.vpc_id}",
+      "subnet_ids": "${var.subnet_ids}",
+      "execution_role_arn": "${var.execution_role_arn}",
+      "task_role_arn": "${var.task_role_arn}",
+      "image_uri": "${var.image_uri}",
+      "container_port": "${var.container_port}",
+      "health_check_path": "${var.health_check_path}",
+      "environment": "${var.environment}",
+      "secret_arns": "${var.secret_arns}",
+      "cpu": "${var.cpu}",
+      "memory": "${var.memory}",
+      "desired_count": "${var.desired_count}",
+      "assign_public_ip": "${var.assign_public_ip}",
+      "certificate_arn": "${var.certificate_arn}"
+    }
+  },
+  "output": {
+    "repository_url": {
+      "value": "${module.preset.repository_url}"
+    },
+    "deployed_image": {
+      "value": "${module.preset.deployed_image}"
+    },
+    "url": {
+      "value": "${module.preset.url}"
+    },
+    "cluster_name": {
+      "value": "${module.preset.cluster_name}"
+    },
+    "service_name": {
+      "value": "${module.preset.service_name}"
+    },
+    "task_definition_arn": {
+      "value": "${module.preset.task_definition_arn}"
+    }
+  }
+}

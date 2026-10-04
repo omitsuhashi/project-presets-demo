@@ -38,8 +38,3 @@ jobs:
         run: |
           gh release create "$GITHUB_REF_NAME" dist/infra/* --verify-tag --draft --generate-notes --title "$GITHUB_REF_NAME"
           gh release edit "$GITHUB_REF_NAME" --draft=false --latest=false
-          gh auth setup-git
-          major=$(python3 -c 'import tomllib; print(tomllib.load(open("infra/pyproject.toml","rb"))["project"]["version"].split(".")[0])')
-          branch="infra-tools/v$major"
-          old=$(git ls-remote --heads origin "$branch" | cut -f1)
-          git push --force-with-lease="refs/heads/$branch:$old" origin "HEAD:refs/heads/$branch"
