@@ -5,37 +5,37 @@
       "version": "2.2.0",
       "tag": "v2.2.0",
       "asset": "typescript-node-2.2.0.tgz",
-      "fingerprint": "9a314c66664cc9fb949185b641597186be533b07f345b805e395ddb1573277b9"
+      "fingerprint": "213a374d9faf278db7e1f73b1eb6a5c690636f64dc1df221ab39383377df2398"
     },
     "typescript-hono": {
       "version": "2.2.0",
       "tag": "v2.2.0",
       "asset": "typescript-hono-2.2.0.tgz",
-      "fingerprint": "73a79969d8febb9ba44975d73ac8ac3fc695623e6574d76f13ccf7aa595ca2c2"
+      "fingerprint": "6754f97185abf8cce50fd8c1fb62ea48e317167e709c3b953db52729ed83a8c8"
     },
     "typescript-next": {
       "version": "2.2.0",
       "tag": "v2.2.0",
       "asset": "typescript-next-2.2.0.tgz",
-      "fingerprint": "edeb236c26f870d1a37d9cb9f09349a1077ef23dc611c5ec0a555e806acb7316"
+      "fingerprint": "07e3df847862481cd9db199bf8350dc04f5e95165e4813253ad17e2d4996f051"
     },
     "python-scripts": {
       "version": "2.2.0",
       "tag": "v2.2.0",
       "asset": "project_presets_demo-2.2.0-1scripts-py3-none-any.whl",
-      "fingerprint": "283e81d1d6f561871e5b2fd7bd583971a3f51416b4ff9c2d8ca922b7b06becaf"
+      "fingerprint": "c8bde93300ea7ed5bff00c55a1e692c6021ecdf0feab75f9fd135915a9237b2a"
     },
     "python-django": {
       "version": "2.2.0",
       "tag": "v2.2.0",
       "asset": "project_presets_demo-2.2.0-1django-py3-none-any.whl",
-      "fingerprint": "85ee1a947fd74bd47bb95f13be7e0919f02f1d1dfc6b24303d31e7f9dc302f44"
+      "fingerprint": "54092a72d3d2a221602f26164b5d5cd86498d7b286e284ec1d2e96a8ddd9bf5b"
     },
     "python-fastapi": {
       "version": "2.2.0",
       "tag": "v2.2.0",
       "asset": "project_presets_demo-2.2.0-1fastapi-py3-none-any.whl",
-      "fingerprint": "bea339c0f490e3b6a16de6887fd7b045d5410b7af39510d7fea3abcabbd94384"
+      "fingerprint": "c3f41ac83b21d8eba1fefd469bc1207c32952a48e847ee351cfb5611673d9ad9"
     }
   }
 }

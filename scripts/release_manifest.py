@@ -30,5 +30,3 @@ def validate(index):
                 or not re.fullmatch(r"[a-f0-9]{64}", entry["fingerprint"])):
             raise ValueError(f"Invalid release entry: {profile}")
     return index
-
-

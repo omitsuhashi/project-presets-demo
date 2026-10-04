@@ -25,4 +25,3 @@ def main():
         apply(args)
     except (ValueError, OSError, metadata.PackageNotFoundError, subprocess.CalledProcessError) as error:
         parser.exit(1, f"{error}\n")
-
