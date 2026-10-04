@@ -13,6 +13,7 @@ from functools import partial
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
+import catalog as profile_catalog
 import release_presets
 import tomllib
 
@@ -401,7 +402,7 @@ keep = "application-owned"
     # Build all template artifacts under one publication tag, then publish Hono alone.
     scoped = temp / "scoped"
     scoped.mkdir()
-    for name in ["package.json", "pyproject.toml", "README.md", "LICENSE", "profiles.json", "typescript", "python", "scripts", ".github"]:
+    for name in ["package.json", "pyproject.toml", "README.md", "LICENSE", "profiles.json", "profiles", "typescript", "python", "scripts", ".github"]:
         source = ROOT / name
         if source.is_dir():
             shutil.copytree(source, scoped / name, ignore=shutil.ignore_patterns("__pycache__"))
@@ -440,10 +441,11 @@ keep = "application-owned"
         run(temp, *cli[:-1], other, str(consumer), "--write", expected=1)
         commit(consumer, "Adopt independently versioned template")
         consumers[profile] = consumer
-    catalog_path = scoped / "profiles.json"
-    scoped_catalog = json.loads(catalog_path.read_text())
-    scoped_catalog["typescript-hono"]["framework"] = "Hono on Node.js 24"
-    catalog_path.write_text(json.dumps(scoped_catalog))
+    definitions_path = scoped / "profiles/definitions.json"
+    definitions = json.loads(definitions_path.read_text())
+    definitions["typescript-hono"]["framework"] = "Hono on Node.js 24"
+    definitions_path.write_text(json.dumps(definitions))
+    profile_catalog.generate(scoped)
     assert release_presets.prepare(scoped, "v2.3.0") == ["typescript-hono"]
     second = release_presets.check(scoped)
     second_dist = temp / "hono-artifacts"

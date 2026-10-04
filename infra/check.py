@@ -11,11 +11,12 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
-import project_presets_infra as preset
+from project_presets_infra import bootstrap, deploy, native, update
+from project_presets_infra.config import PROFILES, PROVIDER, REPOSITORY
 
 ROOT = Path(__file__).resolve().parent.parent
 APP_RELEASE = "2.1.0"
-RELEASES = f"https://github.com/{preset.REPOSITORY}/releases/download"
+RELEASES = f"https://github.com/{REPOSITORY}/releases/download"
 
 
 def run(*args):
@@ -30,7 +31,7 @@ def check(containers):
         with zipfile.ZipFile(wheel) as archive:
             assert any(name.endswith("templates/hono.Dockerfile") for name in archive.namelist())
         cli = ["uvx", "--python", "3.12", "--from", str(wheel), "project-presets-infra"]
-        for profile in preset.PROFILES:
+        for profile in PROFILES:
             consumer = temporary / profile
             consumer.mkdir()
             if containers:
@@ -43,7 +44,7 @@ def check(containers):
                         "project-presets-python", profile, consumer, "--setup")
             else:
                 (consumer / ("package.json" if profile.startswith("typescript-") else "pyproject.toml")).write_text("{}")
-                preset.write_json(consumer / ".project-preset.json", {"profile": profile})
+                native.write_json(consumer / ".project-preset.json", {"profile": profile})
             run(*cli, "init", "--directory", consumer, "--name", "demo", "--repository", "example/consumer")
             assert "infra-tools/v1" in (consumer / ".github/workflows/update-infra.yml").read_text()
             marker = consumer / "infra/.project-infra.json"
@@ -52,7 +53,7 @@ def check(containers):
             old_docker = consumer / "Dockerfile"
             old_docker.write_text("# old preset\n" + old_docker.read_text())
             state["files"]["Dockerfile"] = hashlib.sha256(old_docker.read_bytes()).hexdigest()
-            preset.write_json(marker, state)
+            native.write_json(marker, state)
             before = marker.read_bytes()
             foundation_before = (consumer / "infra/foundation/preset.tf.json").read_bytes()
             # A foundation/provider conflict must stop before any managed file is replaced.
@@ -61,23 +62,23 @@ def check(containers):
             value["terraform"]["required_providers"]["aws"]["configuration_aliases"] = []
             value["resource"] = {"terraform_data": {"custom": {"input": "keep me"}}}
             value["terraform"]["required_providers"]["aws"]["version"] = "custom"
-            preset.write_json(app, value)
-            with patch.object(preset.importlib.metadata, "version", return_value="1.1.0"):
+            native.write_json(app, value)
+            with patch.object(update.importlib.metadata, "version", return_value="1.1.0"):
                 try:
-                    preset.update(consumer, "1.1.0")
+                    update.update(consumer, "1.1.0")
                     raise AssertionError("Managed provider conflict was silently overwritten")
                 except ValueError as error:
                     assert "changed locally" in str(error)
                 assert marker.read_bytes() == before
                 assert (consumer / "infra/foundation/preset.tf.json").read_bytes() == foundation_before
-                value["terraform"]["required_providers"]["aws"]["version"] = f"= {preset.PROVIDER}"
-                preset.write_json(app, value)
+                value["terraform"]["required_providers"]["aws"]["version"] = f"= {PROVIDER}"
+                native.write_json(app, value)
                 inputs = consumer / "infra/app/terraform.tfvars.json"
                 configured = json.loads(inputs.read_text())
                 configured["environment"] = {"CUSTOM": "preserve"}
-                preset.write_json(inputs, configured)
+                native.write_json(inputs, configured)
                 input_bytes = inputs.read_bytes()
-                preset.update(consumer, "1.1.0")
+                update.update(consumer, "1.1.0")
                 assert json.loads(app.read_text())["resource"] == value["resource"]
                 assert json.loads(app.read_text())["terraform"]["required_providers"]["aws"]["configuration_aliases"] == []
                 assert inputs.read_bytes() == input_bytes
@@ -90,29 +91,30 @@ def check(containers):
             values = {"state_bucket": "demo-state", "deployment_role_arn": "arn:aws:iam::123456789012:role/demo-deployment",
                       "execution_role_arn": "arn:aws:iam::123456789012:role/demo-execution",
                       "task_role_arn": "arn:aws:iam::123456789012:role/demo-task", "vpc_id": "vpc-12345678", "subnet_ids": ["subnet-a", "subnet-b"]}
-            with patch.object(preset, "identity", return_value="123456789012"), patch.object(preset.shutil, "which", return_value="/fake"), patch.object(preset, "tf") as native, patch.object(preset, "outputs", side_effect=[values, {"deployed_image": image}, {"cluster_name": "demo", "service_name": "demo", "task_definition_arn": "task-arn", "url": "http://demo.invalid"}]), patch.object(preset, "run", side_effect=["task-arn", image]), patch.object(preset.subprocess, "run", return_value=SimpleNamespace(returncode=0, stdout="", stderr="")):
-                preset.bootstrap(operator, True)
-                assert any("-migrate-state" in call.args for call in native.call_args_list)
-                assert any(f"-var=image_uri={image}" in call.args for call in native.call_args_list)
-            with patch.object(preset, "tf") as native, patch.object(preset, "outputs", return_value={"deployed_image": image}):
-                preset.plan(operator)
-                assert any(f"-var=image_uri={image}" in call.args for call in native.call_args_list)
-                assert all("apply" not in call.args for call in native.call_args_list)
-            with patch.object(preset, "tf"), patch.object(preset, "outputs", return_value={"cluster_name": "demo", "service_name": "demo", "task_definition_arn": "task-arn", "url": "http://demo.invalid"}), patch.object(preset, "run", side_effect=["task-arn", "old-image"]):
+            with patch.object(bootstrap, "identity", return_value="123456789012"), patch.object(bootstrap.shutil, "which", return_value="/fake"), patch.object(bootstrap, "tf") as commands, patch.object(bootstrap, "outputs", side_effect=[values, {"deployed_image": image}]), patch.object(bootstrap, "verify_deployment") as verify, patch.object(bootstrap.subprocess, "run", return_value=SimpleNamespace(returncode=0, stdout="", stderr="")):
+                bootstrap.bootstrap(operator, True)
+                verify.assert_called_once_with(operator, image)
+                assert any("-migrate-state" in call.args for call in commands.call_args_list)
+                assert any(f"-var=image_uri={image}" in call.args for call in commands.call_args_list)
+            with patch.object(deploy, "tf") as commands, patch.object(deploy, "outputs", return_value={"deployed_image": image}):
+                deploy.plan(operator)
+                assert any(f"-var=image_uri={image}" in call.args for call in commands.call_args_list)
+                assert all("apply" not in call.args for call in commands.call_args_list)
+            with patch.object(deploy, "tf"), patch.object(deploy, "outputs", return_value={"cluster_name": "demo", "service_name": "demo", "task_definition_arn": "task-arn", "url": "http://demo.invalid"}), patch.object(deploy, "run", side_effect=["task-arn", "old-image"]):
                 try:
-                    preset.plan(operator, image=image, apply=True)
+                    deploy.plan(operator, image=image, apply=True)
                     raise AssertionError("An ECS rollback was reported as successful deployment")
                 except ValueError as error:
                     assert "requested image" in str(error)
-            with patch.object(preset, "outputs", return_value={"cluster_name": "demo", "service_name": "demo", "task_definition_arn": "task-arn"}), patch.object(preset, "run", return_value="previous-task-arn"):
+            with patch.object(deploy, "outputs", return_value={"cluster_name": "demo", "service_name": "demo", "task_definition_arn": "task-arn"}), patch.object(deploy, "run", return_value="previous-task-arn"):
                 try:
-                    preset.verify_deployment(operator, image)
+                    deploy.verify_deployment(operator, image)
                     raise AssertionError("Configuration rollback with the same image was reported as successful")
                 except ValueError as error:
                     assert "requested task revision" in str(error)
-            with patch.object(preset, "tf"), patch.object(preset.subprocess, "run", return_value=SimpleNamespace(returncode=2)):
+            with patch.object(native, "tf"), patch.object(native.subprocess, "run", return_value=SimpleNamespace(returncode=2)):
                 try:
-                    preset.foundation_plan(operator, require_unchanged=True)
+                    native.foundation_plan(operator, require_unchanged=True)
                     raise AssertionError("CI would apply an unreviewed IAM/network change")
                 except ValueError as error:
                     assert "operator review" in str(error)
@@ -121,7 +123,7 @@ def check(containers):
                 path = consumer / "infra" / folder
                 value = json.loads((path / "preset.tf.json").read_text())
                 value["module"]["preset"]["source"] = str(ROOT / "infra/modules" / kind)
-                preset.write_json(path / "preset.tf.json", value)
+                native.write_json(path / "preset.tf.json", value)
                 run("terraform", f"-chdir={path}", "init", "-backend=false", "-input=false")
                 run("terraform", f"-chdir={path}", "validate")
             # init preserves project-owned Dockerfiles and refuses other file collisions.
@@ -130,7 +132,7 @@ def check(containers):
             shutil.copy2(consumer / ("package.json" if profile.startswith("typescript-") else "pyproject.toml"), existing)
             (existing / "Dockerfile").write_text("custom Dockerfile\n")
             mismatched = "typescript-next" if profile.startswith("typescript-") else "python-django"
-            preset.write_json(existing / ".project-preset.json", {"profile": mismatched})
+            native.write_json(existing / ".project-preset.json", {"profile": mismatched})
             result = subprocess.run([*cli, "init", "--directory", str(existing), "--profile", profile, "--name", "demo", "--repository", "example/consumer"], capture_output=True, text=True)
             assert result.returncode == 1 and "must match" in result.stderr
             assert not (existing / "infra").exists()
@@ -145,9 +147,9 @@ def check(containers):
                 entry.write_text(entry.read_text() + guard)
                 run(*cli, "container-check", "--directory", consumer)
             configured["secret_arns"] = {"TOKEN": "arn:aws:secretsmanager:ap-northeast-1:123456789012:secret:demo"}
-            preset.write_json(inputs, configured)
-            with patch.object(preset, "run") as commands:
-                preset.container_check(consumer)
+            native.write_json(inputs, configured)
+            with patch.object(deploy, "run") as commands:
+                deploy.container_check(consumer)
                 assert not any("aws" in call.args or "--detach" in call.args for call in commands.call_args_list)
         print("Infrastructure wheel, both consumer roots, conflict preservation and deferred bootstrap passed")
 

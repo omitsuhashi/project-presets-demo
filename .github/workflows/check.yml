@@ -28,5 +28,5 @@ jobs:
       - run: node node_modules/pnpm/bin/pnpm.mjs run lint
       - run: node node_modules/pnpm/bin/pnpm.mjs run demo:ts
       - run: node node_modules/pnpm/bin/pnpm.mjs run demo:py
-      - run: uv run --locked ruff check --config python/base.toml python/project_presets_demo scripts/check-packages.py scripts/update-consumer.py scripts/check-release-routing.py scripts/release_presets.py
+      - run: uv run --locked ruff check --config python/base.toml python/project_presets_demo scripts tests
       - run: node node_modules/pnpm/bin/pnpm.mjs test

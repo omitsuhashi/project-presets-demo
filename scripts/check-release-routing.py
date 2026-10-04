@@ -9,6 +9,7 @@ import tempfile
 from pathlib import Path
 from unittest.mock import patch
 
+import catalog as profile_catalog
 import release_presets as releases
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -25,7 +26,7 @@ def publication(index, draft=False, prerelease=False):
 with tempfile.TemporaryDirectory() as directory:
     root = Path(directory) / "provider"
     root.mkdir()
-    for name in ["package.json", "pyproject.toml", "profiles.json", "python", "typescript", "scripts", ".github"]:
+    for name in ["package.json", "pyproject.toml", "profiles.json", "profiles", "python", "typescript", "scripts", ".github"]:
         source = ROOT / name
         if source.is_dir():
             shutil.copytree(source, root / name, ignore=shutil.ignore_patterns("__pycache__"))
@@ -42,10 +43,11 @@ with tempfile.TemporaryDirectory() as directory:
         raise AssertionError("A different Git tag was accepted")
     except ValueError:
         pass
-    catalog_path = root / "profiles.json"
-    catalog = json.loads(catalog_path.read_text())
-    catalog["typescript-hono"]["dependencies"]["hono"] = "4.13.13"
-    catalog_path.write_text(json.dumps(catalog))
+    package_path = root / "package.json"
+    package = json.loads(package_path.read_text())
+    package["devDependencies"]["hono"] = "4.13.13"
+    package_path.write_text(json.dumps(package))
+    profile_catalog.generate(root)
     assert releases.prepare(root, "v2.3.0") == ["typescript-hono"]
     changed = releases.check(root, "v2.3.0")
     assert changed["profiles"]["typescript-hono"]["version"] == "2.2.1"

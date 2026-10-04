@@ -2,6 +2,22 @@
 
 言語・フレームワーク・依存パッケージの版と、それに合う lint / TypeScript 設定を配布するデモです。**GitHub Release の npm tarball / Python wheel を固定して導入します。npm・PyPI のアカウントは不要です。**
 
+利用側の流れは **Profile を選ぶ → 固定した成果物で導入する → 更新 PR をレビューする → lock から再構築する** です。AWS インフラは独立した追加機能です。
+
+この README の導入例は公開済み v2.1.0 を使います。開発中の v2.2.0 は、6つの Profile の版を独立して管理する未公開版です。公開タグは1回につき1つで、`release-manifest.json` が各 Profile の版と元の配布先を記録します。変更した Profile だけ build し、利用側は自分の版が変わっていなければ終了します。[版と公開単位](docs/publish.md#版と公開単位) と [既存 workflow の移行](docs/update.md#テンプレート別リリースへの移行) を参照してください。
+
+## コードを読む入口
+
+| 責務 | 入口 |
+| --- | --- |
+| Profile の構成と依存版 | [版を持たない Profile 定義](profiles/definitions.json)、版の正本は [package.json](package.json) / [pyproject.toml](pyproject.toml) |
+| 利用側の TypeScript 導入・更新 | [CLI](scripts/apply-profile.mjs) → [変更計画](scripts/presets/plan.mjs) → [適用・検証](scripts/presets/project.mjs) |
+| 利用側の Python 導入・更新 | [CLI](python/project_presets_demo/cli.py) → [変更計画](python/project_presets_demo/plan.py) → [適用・検証](python/project_presets_demo/project.py) |
+| 配布側の公開・利用側の更新選択 | [公開処理](scripts/release_presets.py)、[更新処理](scripts/update-consumer.py)、[共有 manifest](scripts/release_manifest.py) |
+| AWS インフラ | [CLI](infra/python/project_presets_infra/cli.py) から生成・更新・bootstrap・配置へ |
+
+[構成と保守方法](docs/architecture.md) に、処理の流れと変更時の検証をまとめています。
+
 ## 最初の導入
 
 空のディレクトリから、`npx` / `uvx` の CLI 一回で manifest・設定・必要な依存・lockfile・更新 PR 用 workflow が揃います。`package.json` / `pyproject.toml` がなければ自動作成します。配布パッケージの事前インストールも、Linter やフレームワークの個別インストールも不要です。
@@ -44,7 +60,7 @@ uvx --python 3.12 \
 | `python-django` | Python 3.12 / Django | Django 6.1.1、Ruff の `DJ` ルール、service 用の print 検査 |
 | `python-fastapi` | Python 3.12 / HTTP API | FastAPI 0.142.2、Uvicorn 0.54.0、Ruff の `FAST` ルール、`Annotated` を推奨 |
 
-[TypeScript catalog](profiles.json) / [Python catalog](python/profiles.json) と各パッケージの manifest を CI で照合します。Next.js と `eslint-config-next` も同じ版に揃え、代表アプリで検証します。
+[TypeScript catalog](profiles.json) / [Python catalog](python/profiles.json) は [生成 script](scripts/catalog.py) で native manifest の固定版から作ります。CI は生成結果の一致を確認します。Next.js と `eslint-config-next` も同じ版に揃え、代表アプリで検証します。
 
 ESLint 9 は [2026-08-06 に EOL](https://eslint.org/version-support/) です。Next.js の React plugin の peer 対応に合わせて、このデモでは 9 を固定しています。本運用に昇格する前に、保守中のツールを使える組み合わせへ移行してください。このデモの検証対象と、組織のサポート範囲は別に決めます。
 
@@ -82,5 +98,3 @@ CI では manifest / catalog の整合性、Hono の応答、Next.js の build�
 旧 Python submodule の設定パスは互換用に残しています。新規導入は wheel を使い、移行方法は [導入手順](docs/install.md#既存案件) を参照してください。
 
 MIT License.
-
-2.2.0 からは6テンプレートの版を独立して管理します（現時点では未公開）。公開は1回につき `vX.Y.Z` タグ1つと Release 1つです。`release-manifest.json` が各テンプレートの版・元の配布先を記録し、変更したテンプレートだけ build します。利用側は自分のテンプレートが同じ版なら終了します。[公開手順](docs/publish.md) と [既存 workflow の移行](docs/update.md#テンプレート別リリースへの移行) を参照してください。
