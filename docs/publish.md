@@ -2,6 +2,8 @@
 
 依存・共通設定を更新し、検証した成果物を GitHub Release に公開する手順です。npm / PyPI には publish しません。利用側への適用は [更新手順](update.md) に従います。
 
+インフラ用は別 package / 別タグで、[インフラの配布側更新](infrastructure.md#配布側が更新する) に従います。
+
 ## 版と公開単位
 
 **テンプレートの版は6つ、公開タグと Release は1回につき1つ**です。`release-manifest.json` を版と配布先の管理元にします。ルートの `package.json` / `pyproject.toml` は配布元の開発環境用です。build 時に各成果物の native version をテンプレート版に設定するため、ルートの版を毎回揃える必要はありません。
