@@ -43,19 +43,25 @@ TypeScript の `scripts/presets/plan.mjs` と Python の `python/project_presets
 
 ## AWS インフラ
 
-アプリ preset と独立した package / タグを使います。Terraform module の参照先は `infra/modules/` です。
+アプリ preset と独立した package / タグで、共通 Terraform module と初回 recipe を配布します。
+module の採用版は利用側 root の固定 ref、provider は root の制約と native lock で管理します。
 
-| Module | 責務 |
+| 資材 | 責務・所有 |
 | --- | --- |
-| `cli.py` | コマンドの引数と処理の選択 |
-| `scaffold.py` | Terraform root・Dockerfile・workflow の生成 |
-| `update.py` | 管理参照と Docker template の更新・衝突検出 |
-| `bootstrap.py` | operator による初期設定と state の移行 |
-| `deploy.py` | コンテナ検証・ECR push・digest を指定した配置・ECS revision の確認 |
-| `native.py` | process 実行、Terraform state、AWS account、foundation の変更検出 |
-| `config.py` | Profile・固定 provider・module source の定義 |
+| `infra/modules/` | 配布側が継続保守する Terraform module |
+| `cli.py` / `scaffold.py` / `config.py` | 初回 `init` と v1 からの所有移行。通常配置・継続更新は担当しない |
+| `recipe/scripts/` | 利用側へコピーする bootstrap・配置・検証の見本。コピー後は案件所有 |
+| `recipe/*.yml` | 案件内 scripts を実行する検証/配置 workflow の見本 |
+| `templates/` | 初回の Dockerfile・起動例。生成後は案件所有 |
 
-AWS の初期設定と通常配置の権限・確認手順は [インフラ手順](infrastructure.md) に従います。
+v2 は所有 marker、Dockerfile hash、インフラ更新 PR workflow を持ちません。
+module source / provider 制約 / Dockerfile / scripts / workflow の変更は利用側でレビューします。
+既存案件へ recipe の新版を自動同期しません。通常の配置が配布元の可変 branch や Python package に依存することもありません。
+
+foundation/app の state と operator/CI の権限分離は維持します。state 作成・S3 移行・既存 OIDC・image digest の引継ぎは、
+案件所有の bootstrap / deploy recipe に実装します。標準の Terraform / Docker / AWS CLI も直接使えます。
+v1 移行では root・module ref・backend・state address を保持し、workflow/scripts と所有ルールだけを変更します。
+[導入・保守・移行](infrastructure.md) に具体的な手順があります。
 
 ## 変更時の検証
 

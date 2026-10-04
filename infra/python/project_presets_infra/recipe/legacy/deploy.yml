@@ -1,0 +1,17 @@
+name: Deploy AWS app
+on:
+  push:
+    branches: [__BRANCH__]
+  workflow_dispatch:
+permissions:
+  contents: read
+  pull-requests: read
+  id-token: write
+concurrency:
+  group: aws-infrastructure
+  cancel-in-progress: false
+jobs:
+  infrastructure:
+    uses: omitsuhashi/project-presets-demo/.github/workflows/infra-consumer.yml@infra-tools/v1
+    with:
+      mode: deploy

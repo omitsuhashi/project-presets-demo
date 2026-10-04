@@ -1,4 +1,4 @@
-"""Versioned infrastructure presets with a stable installed CLI entry point."""
+"""Initial scaffolding; generated infrastructure files belong to the consumer."""
 
 from .cli import main
 

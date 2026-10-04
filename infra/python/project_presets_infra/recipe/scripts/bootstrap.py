@@ -4,8 +4,8 @@ import json
 import shutil
 import subprocess
 
-from .deploy import verify_deployment
-from .native import backend, identity, outputs, tf, write_json
+from deploy import verify_deployment
+from native import backend, identity, outputs, tf, write_json
 
 
 def bootstrap(target, apply):
@@ -15,7 +15,6 @@ def bootstrap(target, apply):
     if not shutil.which("aws") or not shutil.which("terraform"):
         raise ValueError("bootstrap needs Terraform >=1.10 and AWS CLI with operator credentials")
     account = identity(target)
-    state = json.loads((target / "infra/.project-infra.json").read_text())
     variables = json.loads((foundation / "terraform.tfvars.json").read_text())
     variables["secret_arns"] = json.loads((app / "terraform.tfvars.json").read_text())["secret_arns"]
     tf(foundation, "init", "-input=false", "-migrate-state", "-force-copy")
@@ -23,7 +22,8 @@ def bootstrap(target, apply):
     if listed.returncode and "No state file was found" not in listed.stderr:
         raise ValueError(listed.stderr)
     # Reuse an account's OIDC provider; don't adopt or delete another project's provider.
-    if "aws_iam_openid_connect_provider.github" not in listed.stdout and variables["existing_oidc_provider_arn"] is None:
+    owned_oidc = any(address.endswith("aws_iam_openid_connect_provider.github[0]") for address in listed.stdout.splitlines())
+    if not owned_oidc and variables["existing_oidc_provider_arn"] is None:
         arn = f"arn:aws:iam::{account}:oidc-provider/token.actions.githubusercontent.com"
         result = subprocess.run(["aws", "iam", "get-open-id-connect-provider", "--open-id-connect-provider-arn", arn], capture_output=True, text=True)
         if result.returncode == 0:
@@ -37,13 +37,14 @@ def bootstrap(target, apply):
     tf(foundation, "apply", "bootstrap.tfplan")
     values = outputs(foundation)
     if not (foundation / "backend.tf.json").exists():
-        backend(foundation, values["state_bucket"], state["region"], "foundation/terraform.tfstate")
+        backend(foundation, values["state_bucket"], variables["region"], "foundation/terraform.tfstate")
         tf(foundation, "init", "-migrate-state", "-force-copy", "-input=false")
     inputs = {key: values[key] for key in ["vpc_id", "subnet_ids", "execution_role_arn", "task_role_arn"]}
     generated = app / "foundation.auto.tfvars.json"
     existing = json.loads(generated.read_text()) if generated.exists() else {}
     write_json(generated, {**existing, **inputs})
-    backend(app, values["state_bucket"], state["region"], "app/terraform.tfstate")
+    if not (app / "backend.tf.json").exists():
+        backend(app, values["state_bucket"], variables["region"], "app/terraform.tfstate")
     deployment_role = values["deployment_role_arn"]
     tf(app, "init", "-input=false")
     values = outputs(app)
@@ -52,5 +53,5 @@ def bootstrap(target, apply):
     tf(app, "apply", "bootstrap.tfplan")
     if image:
         verify_deployment(target, image)
-    write_json(target / "infra/aws.json", {"account": account, "region": state["region"], "role": deployment_role})
+    write_json(target / "infra/aws.json", {"account": account, "region": variables["region"], "role": deployment_role})
     print("Bootstrap complete. Commit infra/*.json, root calls, native provider locks and workflows. Never commit state/plans or AWS credentials.")

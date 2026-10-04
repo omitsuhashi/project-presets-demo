@@ -1,4 +1,4 @@
-"""Native process, Terraform state and AWS identity operations."""
+"""Project-owned Terraform and AWS operations; edit alongside your infrastructure."""
 
 import json
 import subprocess
@@ -33,7 +33,7 @@ def backend(path, bucket, region, key):
 
 
 def identity(target):
-    region = json.loads((target / "infra/.project-infra.json").read_text())["region"]
+    region = json.loads((target / "infra/foundation/terraform.tfvars.json").read_text())["region"]
     account = json.loads(run("aws", "sts", "get-caller-identity", "--region", region, "--output", "json", capture=True))["Account"]
     config = target / "infra/aws.json"
     if config.exists() and json.loads(config.read_text())["account"] != account:

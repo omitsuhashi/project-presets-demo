@@ -37,5 +37,5 @@ jobs:
             terraform -chdir="$module" validate
             terraform -chdir="$module" test
           done
-      - name: Check wheel, bootstrap, updates, conflicts and both running containers
+      - name: Check wheel, consumer ownership, v1 migration, bootstrap and both containers
         run: uv run --project infra python infra/check.py --containers
